@@ -28,7 +28,7 @@ const QuickAction = ({ to, icon: Icon, title, description, color }) => (
   <Link to={to}>
     <motion.div
       whileTap={{ scale: 0.98 }}
-      className="flex items-center gap-3 p-4 rounded-xl border border-border/40 bg-card active:bg-muted/50 transition-all"
+      className="flex items-center gap-3 p-4 rounded-xl border border-border/40 bg-card active:bg-muted/50 transition-all mb-3"
     >
       <div className={`h-12 w-12 rounded-xl ${color} flex items-center justify-center shrink-0`}>
         <Icon className="h-6 w-6 text-white" />
@@ -43,7 +43,7 @@ const QuickAction = ({ to, icon: Icon, title, description, color }) => (
 );
 
 export const DashboardPage = () => {
-  const { mounted, financialData, formatCurrency, summary } = useFinancial();
+  const { mounted, financialData, formatCurrency, summary, user } = useFinancial();
 
   if (!mounted) {
     return (
@@ -64,8 +64,8 @@ export const DashboardPage = () => {
     >
       {/* Greeting */}
       <motion.div variants={itemVariants} className="pt-2">
-        <h1 className="text-xl font-bold">Olá! 👋</h1>
-        <p className="text-sm text-muted-foreground">Acompanhe seu patrimônio</p>
+        <h1 className="text-xl font-bold">Olá, {user?.displayName?.split(' ')[0] || 'bem-vindo'}!</h1>
+        <p className="text-sm text-muted-foreground">Vamos alavancar seu patrimônio!</p>
       </motion.div>
 
       {/* Summary Cards */}
