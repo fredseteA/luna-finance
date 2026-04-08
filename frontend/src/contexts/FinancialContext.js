@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useMemo, useCallback, useState, useEffect } from 'react';
 import { useTheme } from '../hooks/useTheme';
+import { useAuth } from './AuthContext';
 import { storageService } from '../services/storageService';
-import { 
-  projectPatrimonyEvolution, 
+import {
+  projectPatrimonyEvolution,
   generateId,
   formatCurrency,
   formatPercentage,
@@ -22,8 +23,9 @@ export const useFinancial = () => {
 };
 
 export const FinancialProvider = ({ children }) => {
-  const { theme, toggleTheme, isDark, mounted: themeMounted } = useTheme();
-  
+  const { user } = useAuth();
+  const uid = user?.uid;
+
   // State
   const [settings, setSettings] = useState(storageService.getDefaultSettings());
   const [financialData, setFinancialData] = useState(storageService.getDefaultFinancialData());
@@ -32,15 +34,23 @@ export const FinancialProvider = ({ children }) => {
   const [dismissedAlerts, setDismissedAlerts] = useState([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Load data from storage on mount
+  const { theme, toggleTheme, isDark, mounted: themeMounted, setTheme } = useTheme(settings.theme);
+
+  // Carrega dados do Firestore quando o usuário faz login
   useEffect(() => {
+    if (!uid) {
+      setIsLoaded(false);
+      return;
+    }
+
     const loadData = async () => {
+      setIsLoaded(false);
       const [storedSettings, storedFinancialData, storedScenarios, storedObjectives, storedDismissed] = await Promise.all([
-        storageService.getSettings(),
-        storageService.getFinancialData(),
-        storageService.getScenarios(),
-        storageService.getLifeObjectives(),
-        storageService.getDismissedAlerts(),
+        storageService.getSettings(uid),
+        storageService.getFinancialData(uid),
+        storageService.getScenarios(uid),
+        storageService.getLifeObjectives(uid),
+        storageService.getDismissedAlerts(uid),
       ]);
 
       if (storedSettings) setSettings(storedSettings);
@@ -48,47 +58,61 @@ export const FinancialProvider = ({ children }) => {
       if (storedScenarios) setScenarios(storedScenarios);
       if (storedObjectives) setLifeObjectives(storedObjectives);
       if (storedDismissed) setDismissedAlerts(storedDismissed);
-      
+
       setIsLoaded(true);
     };
 
     loadData();
-  }, []);
+  }, [uid]);
 
-  // Persist settings
+  // Sincroniza o tema com o settings quando o tema muda
   useEffect(() => {
-    if (isLoaded) {
-      storageService.saveSettings(settings);
+    if (isLoaded && uid) {
+      setSettings(prev => ({ ...prev, theme }));
     }
-  }, [settings, isLoaded]);
+  }, [theme]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Persist financial data
+  // Aplica o tema salvo no settings quando carrega
   useEffect(() => {
-    if (isLoaded) {
-      storageService.saveFinancialData(financialData);
+    if (isLoaded && settings.theme) {
+      setTheme(settings.theme);
     }
-  }, [financialData, isLoaded]);
+  }, [isLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Persist scenarios
+  // Persiste settings
   useEffect(() => {
-    if (isLoaded) {
-      storageService.saveScenarios(scenarios);
+    if (isLoaded && uid) {
+      storageService.saveSettings(uid, settings);
     }
-  }, [scenarios, isLoaded]);
+  }, [settings, isLoaded, uid]);
 
-  // Persist life objectives
+  // Persiste financial data
   useEffect(() => {
-    if (isLoaded) {
-      storageService.saveLifeObjectives(lifeObjectives);
+    if (isLoaded && uid) {
+      storageService.saveFinancialData(uid, financialData);
     }
-  }, [lifeObjectives, isLoaded]);
+  }, [financialData, isLoaded, uid]);
 
-  // Persist dismissed alerts
+  // Persiste scenarios
   useEffect(() => {
-    if (isLoaded) {
-      storageService.saveDismissedAlerts(dismissedAlerts);
+    if (isLoaded && uid) {
+      storageService.saveScenarios(uid, scenarios);
     }
-  }, [dismissedAlerts, isLoaded]);
+  }, [scenarios, isLoaded, uid]);
+
+  // Persiste life objectives
+  useEffect(() => {
+    if (isLoaded && uid) {
+      storageService.saveLifeObjectives(uid, lifeObjectives);
+    }
+  }, [lifeObjectives, isLoaded, uid]);
+
+  // Persiste dismissed alerts
+  useEffect(() => {
+    if (isLoaded && uid) {
+      storageService.saveDismissedAlerts(uid, dismissedAlerts);
+    }
+  }, [dismissedAlerts, isLoaded, uid]);
 
   // Settings management
   const updateSettings = useCallback((updates) => {
@@ -215,13 +239,14 @@ export const FinancialProvider = ({ children }) => {
 
   // Reset all
   const resetAll = useCallback(async () => {
-    await storageService.clearAll();
+    await storageService.clearAll(uid);
     setSettings(storageService.getDefaultSettings());
     setFinancialData(storageService.getDefaultFinancialData());
     setScenarios([]);
     setLifeObjectives([]);
     setDismissedAlerts([]);
-  }, []);
+    setIsLoaded(false);
+  }, [uid]);
 
   // Calculate projection
   const projection = useMemo(() => {
@@ -247,12 +272,11 @@ export const FinancialProvider = ({ children }) => {
 
   // Summary calculations
   const summary = useMemo(() => {
-    // Calcular a sobra mensal independente da projeção
     const totalFixedCosts = (financialData.fixedCosts || []).reduce((sum, c) => sum + (c.amount || 0), 0);
     const totalVariableExpenses = (financialData.variableExpenses || []).reduce((sum, e) => sum + (e.amount || 0), 0);
     const calculatedSurplus = (financialData.monthlyIncome || 0) - totalFixedCosts - totalVariableExpenses;
-    const calculatedSavingsRate = financialData.monthlyIncome > 0 
-      ? (calculatedSurplus / financialData.monthlyIncome) * 100 
+    const calculatedSavingsRate = financialData.monthlyIncome > 0
+      ? (calculatedSurplus / financialData.monthlyIncome) * 100
       : 0;
 
     if (projection.length === 0) {
@@ -285,8 +309,8 @@ export const FinancialProvider = ({ children }) => {
       totalContributions,
       totalReturns,
       monthlySurplus: firstMonth.surplus || calculatedSurplus,
-      savingsRate: financialData.monthlyIncome > 0 
-        ? ((firstMonth.surplus || calculatedSurplus) / financialData.monthlyIncome) * 100 
+      savingsRate: financialData.monthlyIncome > 0
+        ? ((firstMonth.surplus || calculatedSurplus) / financialData.monthlyIncome) * 100
         : 0,
       inflationImpact: lastMonth.patrimony - lastMonth.patrimonyReal,
     };
@@ -317,63 +341,66 @@ export const FinancialProvider = ({ children }) => {
   }, [financialData, settings.rates, projection, scoreBreakdown]);
 
   const value = {
+    // Auth
+    user,
+
     // Settings
     settings,
     updateSettings,
     updateRates,
     currency: settings.currency,
     setCurrency: (currency) => updateSettings({ currency }),
-    
+
     // Theme
     theme,
     toggleTheme,
     isDark,
     mounted: themeMounted && isLoaded,
-    
+
     // Financial data
     financialData,
     updateFinancialData,
-    
+
     // Fixed costs
     addFixedCost,
     updateFixedCost,
     removeFixedCost,
-    
+
     // Variable expenses
     addVariableExpense,
     updateVariableExpense,
     removeVariableExpense,
-    
+
     // Allocation
     updateAllocation,
-    
+
     // Scenarios
     scenarios,
     saveScenario,
     loadScenario,
     deleteScenario,
-    
+
     // Life objectives
     lifeObjectives,
     addLifeObjective,
     updateLifeObjective,
     removeLifeObjective,
-    
+
     // Alerts
     alerts,
     dismissedAlerts,
     dismissAlert,
     clearDismissedAlerts,
-    
+
     // Calculations
     projection,
     summary,
     scoreBreakdown,
     suggestions,
-    
+
     // Reset
     resetAll,
-    
+
     // Utilities
     formatCurrency: (value) => formatCurrency(value, settings.currency),
     formatPercentage,
