@@ -5,58 +5,69 @@ const isRunningStandalone = () =>
   window.navigator.standalone === true ||
   document.referrer.includes('android-app://');
 
-const checkIsIOS = () =>
-  /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
-
 export const useInstallPrompt = () => {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [isInstalled, setIsInstalled] = useState(false);
-  const isIOS = checkIsIOS();
+  const [promptAvailable, setPromptAvailable] = useState(false);
 
   useEffect(() => {
+    // Se já está instalado, para tudo
     if (isRunningStandalone()) {
       setIsInstalled(true);
       return;
     }
 
-    const handleBeforeInstallPrompt = (e) => {
+    const handler = (e) => {
       e.preventDefault();
       setDeferredPrompt(e);
+      setPromptAvailable(true);
     };
 
-    const handleAppInstalled = () => {
+    window.addEventListener('beforeinstallprompt', handler);
+
+    // Detecta instalação via appinstalled
+    const onInstalled = () => {
       setIsInstalled(true);
       setDeferredPrompt(null);
+      setPromptAvailable(false);
     };
+    window.addEventListener('appinstalled', onInstalled);
 
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    window.addEventListener('appinstalled', handleAppInstalled);
+    // Fallback: se o evento não disparar em 3s, ainda mostra opção manual
+    const fallbackTimer = setTimeout(() => {
+      if (!isRunningStandalone()) {
+        setPromptAvailable(true);
+      }
+    }, 3000);
 
     return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-      window.removeEventListener('appinstalled', handleAppInstalled);
+      window.removeEventListener('beforeinstallprompt', handler);
+      window.removeEventListener('appinstalled', onInstalled);
+      clearTimeout(fallbackTimer);
     };
   }, []);
 
   const install = useCallback(async () => {
-    if (!deferredPrompt) return;
-
-    deferredPrompt.prompt();
-
-    const { outcome } = await deferredPrompt.userChoice;
-
-    if (outcome === 'accepted') {
-      setIsInstalled(true);
-      setDeferredPrompt(null);
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setIsInstalled(true);
+        setDeferredPrompt(null);
+        setPromptAvailable(false);
+      }
+    } else {
+      // Fallback manual: instrução via alert nativo
+      // Substitua por modal customizado se preferir
+      alert(
+        'Para instalar:\n• Chrome Android: toque no menu ⋮ → "Adicionar à tela inicial"\n• Safari iOS: toque em compartilhar → "Adicionar à Tela de Início"'
+      );
     }
   }, [deferredPrompt]);
 
-  const hasNativePrompt = !!deferredPrompt;
-
   return {
-    canInstall: (hasNativePrompt || isIOS) && !isInstalled,
-    hasNativePrompt,
-    isIOS,
+    canInstall: promptAvailable && !isInstalled,
+    hasNativePrompt: !!deferredPrompt,
     install,
   };
 };
