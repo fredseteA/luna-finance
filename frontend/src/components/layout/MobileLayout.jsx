@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useInstallPrompt } from '@/hooks/useInstallPrompt';
+import { InstallPromptModal } from '@/components/modal/InstallPromptModal';
 import {
   LayoutDashboard,
   Wallet,
@@ -28,7 +30,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '../ui/alert-dialog';
 import { Logo } from '../brand/Logo';
 import { useFinancial } from '../../contexts/FinancialContext';
@@ -77,6 +78,7 @@ export const MobileLayout = () => {
 
   // Verifica se o login foi por email/senha ou Google
   const isEmailProvider = user?.providerData?.some(p => p.providerId === 'password');
+  const { canInstall, install } = useInstallPrompt();
 
   const handleLogout = async () => {
     setMenuOpen(false);
@@ -147,6 +149,8 @@ export const MobileLayout = () => {
       {/* Background texture */}
       <div className="bg-texture" />
 
+      <InstallPromptModal />
+
       {/* Header */}
       <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur-xl safe-area-top">
         <div className="flex h-14 items-center justify-between px-4">
@@ -189,6 +193,23 @@ export const MobileLayout = () => {
                       </div>
                     </div>
                   </div>
+
+                  {canInstall && (
+                    <button
+                      onClick={install}
+                      className="flex items-center gap-3 p-3 rounded-lg mb-1 w-full hover:bg-muted transition-colors"
+                    >
+                      <div className="p-2 rounded-lg bg-muted">
+                        📲
+                      </div>
+                      <div className="flex-1 text-left">
+                        <p className="font-medium text-sm">Instalar app</p>
+                        <p className="text-xs text-muted-foreground">
+                          Acesse mais rápido pelo celular
+                        </p>
+                      </div>
+                    </button>
+                  )}
 
                   {/* Menu Items */}
                   <div className="flex-1 p-2 overflow-y-auto">
