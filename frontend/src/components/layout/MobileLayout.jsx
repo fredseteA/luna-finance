@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useInstallPrompt } from '@/hooks/useInstallPrompt';
+import { InstallPromptModal } from '@/components/modal/InstallPromptModal';
 import {
   LayoutDashboard,
   Wallet,
@@ -28,7 +30,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '../ui/alert-dialog';
 import { Logo } from '../brand/Logo';
 import { useFinancial } from '../../contexts/FinancialContext';
@@ -62,6 +63,7 @@ export const MobileLayout = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const { theme, toggleTheme, currency, resetAll } = useFinancial();
   const { user, logout } = useAuth();
+  const [showIOSTooltip, setShowIOSTooltip] = useState(false);
 
   // Trocar senha
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -77,6 +79,7 @@ export const MobileLayout = () => {
 
   // Verifica se o login foi por email/senha ou Google
   const isEmailProvider = user?.providerData?.some(p => p.providerId === 'password');
+  const { canInstall, hasNativePrompt, isIOS, install } = useInstallPrompt();
 
   const handleLogout = async () => {
     setMenuOpen(false);
@@ -192,6 +195,45 @@ export const MobileLayout = () => {
 
                   {/* Menu Items */}
                   <div className="flex-1 p-2 overflow-y-auto">
+                    {/* Instalar app — primeiro item */}
+                    {canInstall && (
+                      <>
+                        <button
+                          onClick={() => {
+                            if (isIOS) {
+                              setShowIOSTooltip(prev => !prev); // toggle do tooltip
+                            } else {
+                              install();
+                              setMenuOpen(false);
+                            }
+                          }}
+                          className="flex items-center gap-3 p-3 rounded-lg mb-1 w-full hover:bg-muted transition-colors"
+                        >
+                          <div className="p-2 rounded-lg bg-muted">📲</div>
+                          <div className="flex-1 text-left">
+                            <p className="font-medium text-sm">Instalar app</p>
+                            <p className="text-xs text-muted-foreground">
+                              {isIOS ? 'Veja como adicionar à tela inicial' : 'Acesse mais rápido pelo celular'}
+                            </p>
+                          </div>
+                        </button>
+                    
+                        {/* Tooltip com instrução — só aparece no iOS */}
+                        {isIOS && showIOSTooltip && (
+                          <div className="mx-3 mb-2 p-3 rounded-lg bg-muted border border-border text-xs text-muted-foreground space-y-1">
+                            <p className="font-semibold text-foreground text-sm">Como instalar no iPhone:</p>
+                            <p>1. Toque em <span className="font-medium">compartilhar ⎋</span> na barra do Safari</p>
+                            <p>2. Role e toque em <span className="font-medium">"Adicionar à Tela de Início"</span></p>
+                            <button
+                              onClick={() => setShowIOSTooltip(false)}
+                              className="mt-1 text-xs underline"
+                            >
+                              Entendi
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    )}
                     {moreNavItems.map((item) => {
                       const Icon = item.icon;
                       const isActive = location.pathname === item.path;

@@ -224,7 +224,7 @@ const QuickAddModal = ({ onClose, onAdd, formatCurrency, paymentSources, default
 
       {/* Sheet */}
       <motion.div
-        className="relative w-full max-w-md bg-card border border-border rounded-t-2xl z-10 max-h-[90vh] flex flex-col"
+        className="relative w-full max-w-md bg-card border border-border rounded-t-2xl z-10 max-h-[90dvh] flex flex-col"
         initial={{ y: '100%' }}
         animate={{ y: 0 }}
         exit={{ y: '100%' }}
@@ -245,7 +245,7 @@ const QuickAddModal = ({ onClose, onAdd, formatCurrency, paymentSources, default
         </div>
 
         {/* Conteúdo com scroll */}
-        <div className="overflow-y-auto px-5 pb-6 space-y-5 flex-1">
+        <div className="overflow-y-auto px-5 pb-28 space-y-5 flex-1">
 
           {/* Valor */}
           <div className="space-y-1.5">
