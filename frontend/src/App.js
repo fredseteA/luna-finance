@@ -6,8 +6,9 @@ import { FinancialProvider } from "./contexts/FinancialContext";
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { MobileLayout } from "./components/layout/MobileLayout";
 import { LoginPage } from './pages/LoginPage';
-import { DashboardPage } from "./pages/DashboardPage";
+import { HomePage } from "./pages/HomePage";
 import { PlanejamentoPage } from "./pages/PlanejamentoPage";
+import { PaymentSourcesPage } from './pages/PaymentSourcesPage';
 import { InvestimentosPage } from "./pages/InvestimentosPage";
 import { MetasPage } from "./pages/MetasPage";
 import { SimulacoesPage } from "./pages/SimulacoesPage";
@@ -30,7 +31,8 @@ function App() {
                   <div className="App">
                     <Routes>
                       <Route element={<MobileLayout />}>
-                        <Route path="/" element={<DashboardPage />} />
+                        <Route path="/" element={<HomePage />} />
+                        <Route path="/planejamento/fontes" element={<PaymentSourcesPage />} />
                         <Route path="/planejamento" element={<PlanejamentoPage />} />
                         <Route path="/investimentos" element={<InvestimentosPage />} />
                         <Route path="/metas" element={<MetasPage />} />

@@ -1,13 +1,11 @@
 import {
-  doc, getDoc, setDoc, collection,
-  getDocs, deleteDoc, query, where, writeBatch
+  doc, getDoc, setDoc,
+  writeBatch
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
-// Pega o uid do usuário atual (passado como parâmetro)
 const userDoc = (uid, docName) => doc(db, 'users', uid, 'data', docName);
 
-// ─── Defaults ────────────────────────────────────────────────
 export const storageService = {
   getDefaultSettings: () => ({
     currency: 'BRL',
@@ -29,7 +27,8 @@ export const storageService = {
     surplusAllocation: { investments: 100, emergencyFund: 0, savingsGoals: 0, keepCash: 0 },
   }),
 
-  // ─── Leitura ─────────────────────────────────────────────
+  // ─── Leitura ──────────────────────────────────────────────────────────────
+
   getSettings: async (uid) => {
     if (!uid) return null;
     const snap = await getDoc(userDoc(uid, 'settings'));
@@ -60,7 +59,40 @@ export const storageService = {
     return snap.exists() ? (snap.data().list || []) : [];
   },
 
-  // ─── Escrita ──────────────────────────────────────────────
+  // ─── Transactions (lançamentos pontuais do dia a dia) ─────────────────────
+  // Separados dos variableExpenses — que são gastos recorrentes planejados.
+  // Cada transaction: { id, description, amount, category, date, sourceId, createdAt }
+
+  getTransactions: async (uid) => {
+    if (!uid) return [];
+    const snap = await getDoc(userDoc(uid, 'transactions'));
+    return snap.exists() ? (snap.data().list || []) : [];
+  },
+
+  saveTransactions: async (uid, list) => {
+    if (!uid) return;
+    await setDoc(userDoc(uid, 'transactions'), { list });
+  },
+
+  // ─── Payment Sources (fontes de pagamento) ────────────────────────────────
+  // Cada source: {
+  //   id, name, type, owner, ownerName, color,
+  //   isDefault, includeInProjection, monthlyLimit
+  // }
+
+  getPaymentSources: async (uid) => {
+    if (!uid) return [];
+    const snap = await getDoc(userDoc(uid, 'paymentSources'));
+    return snap.exists() ? (snap.data().list || []) : [];
+  },
+
+  savePaymentSources: async (uid, list) => {
+    if (!uid) return;
+    await setDoc(userDoc(uid, 'paymentSources'), { list });
+  },
+
+  // ─── Escrita ──────────────────────────────────────────────────────────────
+
   saveSettings: async (uid, data) => {
     if (!uid) return;
     await setDoc(userDoc(uid, 'settings'), data);
@@ -86,10 +118,15 @@ export const storageService = {
     await setDoc(userDoc(uid, 'dismissedAlerts'), { list });
   },
 
-  // ─── Reset ────────────────────────────────────────────────
+  // ─── Reset ────────────────────────────────────────────────────────────────
+
   clearAll: async (uid) => {
     if (!uid) return;
-    const docs = ['settings', 'financialData', 'scenarios', 'lifeObjectives', 'dismissedAlerts'];
+    const docs = [
+      'settings', 'financialData', 'scenarios',
+      'lifeObjectives', 'dismissedAlerts', 'transactions',
+      'paymentSources',                    // ← incluído no reset
+    ];
     const batch = writeBatch(db);
     docs.forEach(name => batch.delete(userDoc(uid, name)));
     await batch.commit();
