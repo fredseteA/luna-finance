@@ -21,15 +21,12 @@ export const DEFAULT_RATES = {
 
 // Tax table for CDB/CDI (regressive IR)
 const TAX_TABLE = [
-  { maxDays: 180, rate: 0.225 },   // 22.5%
-  { maxDays: 360, rate: 0.20 },    // 20%
-  { maxDays: 720, rate: 0.175 },   // 17.5%
-  { maxDays: Infinity, rate: 0.15 }, // 15%
+  { maxDays: 180, rate: 0.225 },
+  { maxDays: 360, rate: 0.20 },
+  { maxDays: 720, rate: 0.175 },
+  { maxDays: Infinity, rate: 0.15 },
 ];
 
-/**
- * Format number as currency
- */
 export const formatCurrency = (value, currency = 'BRL') => {
   const config = CURRENCIES[currency] || CURRENCIES.BRL;
   return new Intl.NumberFormat(config.locale, {
@@ -40,84 +37,88 @@ export const formatCurrency = (value, currency = 'BRL') => {
   }).format(value);
 };
 
-/**
- * Format number as percentage
- */
-export const formatPercentage = (value, decimals = 2) => {
-  return `${value.toFixed(decimals)}%`;
-};
+export const formatPercentage = (value, decimals = 2) => `${value.toFixed(decimals)}%`;
 
-/**
- * Convert annual rate to monthly rate
- */
-export const annualToMonthly = (annualRate) => {
-  return Math.pow(1 + annualRate / 100, 1 / 12) - 1;
-};
+export const annualToMonthly = (annualRate) => Math.pow(1 + annualRate / 100, 1 / 12) - 1;
 
-/**
- * Convert monthly rate to annual rate
- */
-export const monthlyToAnnual = (monthlyRate) => {
-  return (Math.pow(1 + monthlyRate, 12) - 1) * 100;
-};
+export const monthlyToAnnual = (monthlyRate) => (Math.pow(1 + monthlyRate, 12) - 1) * 100;
 
-/**
- * Get tax rate based on investment duration
- */
 export const getTaxRate = (months) => {
   const days = months * 30;
   const bracket = TAX_TABLE.find(t => days <= t.maxDays);
   return bracket ? bracket.rate : 0.15;
 };
 
-/**
- * Calculate net return after taxes
- */
 export const calculateNetReturn = (grossReturn, months, investmentType, taxConfig = { enabled: true, fiiExempt: true }) => {
   if (!taxConfig.enabled) return grossReturn;
-  
-  // FII dividends are tax-exempt for individuals in Brazil
-  if (investmentType === 'fii' && taxConfig.fiiExempt) {
-    return grossReturn;
-  }
-  
-  // Apply regressive tax for CDI, Selic, CDB
+  if (investmentType === 'fii' && taxConfig.fiiExempt) return grossReturn;
   if (['cdi', 'selic', 'cdb'].includes(investmentType)) {
-    const taxRate = getTaxRate(months);
-    return grossReturn * (1 - taxRate);
+    return grossReturn * (1 - getTaxRate(months));
   }
-  
   return grossReturn;
 };
 
-/**
- * Adjust value for inflation
- */
 export const adjustForInflation = (value, months, annualInflation) => {
   const monthlyInflation = Math.pow(1 + annualInflation / 100, 1 / 12) - 1;
   return value / Math.pow(1 + monthlyInflation, months);
 };
 
-/**
- * Calculate monthly surplus
- */
 export const calculateMonthlySurplus = (income, fixedCosts, variableExpenses) => {
   const totalFixed = fixedCosts.reduce((sum, cost) => sum + (cost.amount || 0), 0);
   const totalVariable = variableExpenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
   return income - totalFixed - totalVariable;
 };
 
-/**
- * Check if a fixed cost is active in a given month
- */
 export const isFixedCostActive = (cost, currentDate) => {
   if (!cost.endDate) return true;
-  const endDate = new Date(cost.endDate);
-  return currentDate <= endDate;
+  return currentDate <= new Date(cost.endDate);
 };
 
 /**
- * Project patrimony evolution over time
+ * Resolve o aporte de investimento para um mês específico.
+ *
+ * Lógica de prioridade:
+ * 1. tieredContributions — se existir e tiver uma faixa ativa para o mês,
+ *    usa o valor fixo definido nessa faixa (ignora surplusAllocation).
+ * 2. surplusAllocation — comportamento original: percentual da sobra.
+ *
+ * tieredContributions é um array de:
+ *   { id, fromMonth, toMonth|null, amount }
+ *   - fromMonth: número do mês (1-based, relativo ao início da projeção)
+ *   - toMonth: último mês inclusivo (null = até o fim)
+ *   - amount: valor fixo mensal a investir
+ */
+export const resolveMonthlyInvestment = (month, surplus, surplusAllocation, tieredContributions = []) => {
+  if (!tieredContributions || tieredContributions.length === 0) {
+    const pct = (surplusAllocation?.investments ?? 100) / 100;
+    return surplus > 0 ? surplus * pct : 0;
+  }
+
+  // Encontra a faixa ativa para este mês (última que cobre o mês vence)
+  const activeTier = [...tieredContributions]
+    .reverse()
+    .find(t => {
+      const from = t.fromMonth ?? 1;
+      const to = t.toMonth ?? Infinity;
+      return month >= from && month <= to;
+    });
+
+  if (activeTier) {
+    // Respeita o teto da sobra disponível — não investe mais do que sobra
+    return Math.min(activeTier.amount, Math.max(0, surplus));
+  }
+
+  // Fallback para comportamento original
+  const pct = (surplusAllocation?.investments ?? 100) / 100;
+  return surplus > 0 ? surplus * pct : 0;
+};
+
+/**
+ * Project patrimony evolution over time.
+ *
+ * Novo parâmetro: tieredContributions (opcional)
+ * Array de faixas de aporte: [{ id, fromMonth, toMonth, amount }]
+ * Permite modelar mudanças futuras na sobra disponível para investir.
  */
 export const projectPatrimonyEvolution = (config) => {
   const {
@@ -131,67 +132,65 @@ export const projectPatrimonyEvolution = (config) => {
     rates = DEFAULT_RATES,
     reinvestFii = true,
     surplusAllocation = { investments: 100, emergencyFund: 0, savingsGoals: 0, keepCash: 0 },
+    tieredContributions = [],   // NOVO
     inflation = 0,
     taxes = { enabled: true, fiiExempt: true },
   } = config;
 
-  const investmentPercentage = (surplusAllocation.investments || 100) / 100;
   const projection = [];
   let currentDate = new Date(startDate);
-  
-  // Initialize balances
+
   let balances = {
     cdi: initialPatrimony * (allocation.cdi / 100),
     selic: initialPatrimony * (allocation.selic / 100),
     cdb: initialPatrimony * (allocation.cdb / 100),
     fii: initialPatrimony * (allocation.fii / 100),
   };
-  
-  // Cumulative tracking
+
   let cumulativeReturns = { cdi: 0, selic: 0, cdb: 0, fii: 0 };
   let cumulativeContributions = 0;
 
   for (let month = 0; month < durationMonths; month++) {
+    const monthNumber = month + 1; // 1-based
     const monthDate = new Date(currentDate);
     monthDate.setMonth(currentDate.getMonth() + month);
-    
-    // Calculate active costs
+
     const activeFixedCosts = fixedCosts.filter(cost => isFixedCostActive(cost, monthDate));
-    const totalFixedCosts = activeFixedCosts.reduce((sum, cost) => sum + (cost.amount || 0), 0);
-    const totalVariableExpenses = variableExpenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
-    
-    // Calculate surplus
+    const totalFixedCosts = activeFixedCosts.reduce((sum, c) => sum + (c.amount || 0), 0);
+    const totalVariableExpenses = variableExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
     const surplus = monthlyIncome - totalFixedCosts - totalVariableExpenses;
-    
-    // Calculate gross returns
+
     const grossCdiReturn = balances.cdi * annualToMonthly(rates.cdi * (rates.cdiPercentage / 100));
     const grossSelicReturn = balances.selic * annualToMonthly(rates.selic);
     const grossCdbReturn = balances.cdb * annualToMonthly(rates.cdb);
     const grossFiiReturn = balances.fii * (rates.fii / 100);
-    
-    // Apply taxes
-    const cdiReturn = calculateNetReturn(grossCdiReturn, month + 1, 'cdi', taxes);
-    const selicReturn = calculateNetReturn(grossSelicReturn, month + 1, 'selic', taxes);
-    const cdbReturn = calculateNetReturn(grossCdbReturn, month + 1, 'cdb', taxes);
-    const fiiReturn = calculateNetReturn(grossFiiReturn, month + 1, 'fii', taxes);
-    
-    // Track cumulative returns
+
+    const cdiReturn = calculateNetReturn(grossCdiReturn, monthNumber, 'cdi', taxes);
+    const selicReturn = calculateNetReturn(grossSelicReturn, monthNumber, 'selic', taxes);
+    const cdbReturn = calculateNetReturn(grossCdbReturn, monthNumber, 'cdb', taxes);
+    const fiiReturn = calculateNetReturn(grossFiiReturn, monthNumber, 'fii', taxes);
+
     cumulativeReturns.cdi += cdiReturn;
     cumulativeReturns.selic += selicReturn;
     cumulativeReturns.cdb += cdbReturn;
-    cumulativeReturns.fii += (reinvestFii ? fiiReturn : 0);
-    
+    cumulativeReturns.fii += reinvestFii ? fiiReturn : 0;
+
     const totalReturns = cdiReturn + selicReturn + cdbReturn + (reinvestFii ? fiiReturn : 0);
     const fiiDividends = reinvestFii ? 0 : fiiReturn;
-    
-    // Update balances with returns
+
     balances.cdi += cdiReturn;
     balances.selic += selicReturn;
     balances.cdb += cdbReturn;
     if (reinvestFii) balances.fii += fiiReturn;
-    
-    // Distribute surplus
-    const surplusForInvestments = surplus > 0 ? surplus * investmentPercentage : 0;
+
+    // NOVO: usa resolveMonthlyInvestment para suportar faixas de aporte
+    const surplusForInvestments = resolveMonthlyInvestment(
+      monthNumber,
+      surplus,
+      surplusAllocation,
+      tieredContributions,
+    );
+
     if (surplusForInvestments > 0) {
       balances.cdi += surplusForInvestments * (allocation.cdi / 100);
       balances.selic += surplusForInvestments * (allocation.selic / 100);
@@ -199,15 +198,23 @@ export const projectPatrimonyEvolution = (config) => {
       balances.fii += surplusForInvestments * (allocation.fii / 100);
       cumulativeContributions += surplusForInvestments;
     }
-    
-    // Calculate total patrimony
+
     const patrimonyNominal = balances.cdi + balances.selic + balances.cdb + balances.fii;
-    const patrimonyReal = inflation > 0 
-      ? adjustForInflation(patrimonyNominal, month + 1, inflation) 
+    const patrimonyReal = inflation > 0
+      ? adjustForInflation(patrimonyNominal, monthNumber, inflation)
       : patrimonyNominal;
-    
+
+    // activeTier exposto na projeção para que a UI saiba qual faixa está ativa
+    const activeTier = tieredContributions.length > 0
+      ? [...tieredContributions].reverse().find(t => {
+          const from = t.fromMonth ?? 1;
+          const to = t.toMonth ?? Infinity;
+          return monthNumber >= from && monthNumber <= to;
+        }) ?? null
+      : null;
+
     projection.push({
-      month: month + 1,
+      month: monthNumber,
       date: monthDate.toISOString(),
       monthLabel: monthDate.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }),
       income: monthlyIncome,
@@ -215,41 +222,24 @@ export const projectPatrimonyEvolution = (config) => {
       variableExpenses: totalVariableExpenses,
       surplus,
       surplusForInvestments,
+      activeTierId: activeTier?.id ?? null,
       investmentReturns: totalReturns,
-      grossReturns: {
-        cdi: grossCdiReturn,
-        selic: grossSelicReturn,
-        cdb: grossCdbReturn,
-        fii: grossFiiReturn,
-      },
-      netReturns: {
-        cdi: cdiReturn,
-        selic: selicReturn,
-        cdb: cdbReturn,
-        fii: fiiReturn,
-      },
+      grossReturns: { cdi: grossCdiReturn, selic: grossSelicReturn, cdb: grossCdbReturn, fii: grossFiiReturn },
+      netReturns: { cdi: cdiReturn, selic: selicReturn, cdb: cdbReturn, fii: fiiReturn },
       fiiDividends,
       patrimony: patrimonyNominal,
       patrimonyReal,
       inflationImpact: patrimonyNominal - patrimonyReal,
       balances: { ...balances },
-      breakdown: {
-        cdi: balances.cdi,
-        selic: balances.selic,
-        cdb: balances.cdb,
-        fii: balances.fii,
-      },
+      breakdown: { cdi: balances.cdi, selic: balances.selic, cdb: balances.cdb, fii: balances.fii },
       cumulativeReturns: { ...cumulativeReturns },
       cumulativeContributions,
     });
   }
-  
+
   return projection;
 };
 
-/**
- * Calculate time to reach a goal
- */
 export const calculateTimeToGoal = (config) => {
   const {
     targetAmount,
@@ -260,40 +250,36 @@ export const calculateTimeToGoal = (config) => {
     allocation,
     rates,
     surplusAllocation,
-    maxMonths = 600, // 50 years max
+    maxMonths = 600,
   } = config;
-  
+
   const surplus = calculateMonthlySurplus(monthlyIncome, fixedCosts, variableExpenses);
   const investmentPercentage = (surplusAllocation?.investments || 100) / 100;
   const monthlyContribution = surplus * investmentPercentage;
-  
+
   if (monthlyContribution <= 0 && initialPatrimony < targetAmount) {
     return { reachable: false, months: Infinity, reason: 'negative_surplus' };
   }
-  
-  // Simulate month by month
-  let currentPatrimony = initialPatrimony;
-  let months = 0;
-  
-  // Calculate weighted average monthly return
-  const weightedMonthlyReturn = 
+
+  const weightedMonthlyReturn =
     (allocation.cdi / 100) * annualToMonthly(rates.cdi * (rates.cdiPercentage / 100)) +
     (allocation.selic / 100) * annualToMonthly(rates.selic) +
     (allocation.cdb / 100) * annualToMonthly(rates.cdb) +
     (allocation.fii / 100) * (rates.fii / 100);
-  
+
+  let currentPatrimony = initialPatrimony;
+  let months = 0;
+
   while (currentPatrimony < targetAmount && months < maxMonths) {
     currentPatrimony = currentPatrimony * (1 + weightedMonthlyReturn) + monthlyContribution;
     months++;
   }
-  
-  if (months >= maxMonths) {
-    return { reachable: false, months: Infinity, reason: 'exceeds_max' };
-  }
-  
+
+  if (months >= maxMonths) return { reachable: false, months: Infinity, reason: 'exceeds_max' };
+
   const targetDate = new Date();
   targetDate.setMonth(targetDate.getMonth() + months);
-  
+
   return {
     reachable: true,
     months,
@@ -303,17 +289,11 @@ export const calculateTimeToGoal = (config) => {
   };
 };
 
-/**
- * Simulate impact of changes
- */
 export const simulateImpact = (baseConfig, changes) => {
   const baseProjection = projectPatrimonyEvolution(baseConfig);
-  const modifiedConfig = { ...baseConfig, ...changes };
-  const modifiedProjection = projectPatrimonyEvolution(modifiedConfig);
-  
+  const modifiedProjection = projectPatrimonyEvolution({ ...baseConfig, ...changes });
   const baseFinal = baseProjection[baseProjection.length - 1];
   const modifiedFinal = modifiedProjection[modifiedProjection.length - 1];
-  
   return {
     basePatrimony: baseFinal.patrimony,
     modifiedPatrimony: modifiedFinal.patrimony,
@@ -324,27 +304,12 @@ export const simulateImpact = (baseConfig, changes) => {
   };
 };
 
-/**
- * Generate unique ID
- */
-export const generateId = () => {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2);
-};
+export const generateId = () =>
+  Date.now().toString(36) + Math.random().toString(36).substr(2);
 
 export default {
-  formatCurrency,
-  formatPercentage,
-  annualToMonthly,
-  monthlyToAnnual,
-  getTaxRate,
-  calculateNetReturn,
-  adjustForInflation,
-  calculateMonthlySurplus,
-  isFixedCostActive,
-  projectPatrimonyEvolution,
-  calculateTimeToGoal,
-  simulateImpact,
-  generateId,
-  CURRENCIES,
-  DEFAULT_RATES,
+  formatCurrency, formatPercentage, annualToMonthly, monthlyToAnnual,
+  getTaxRate, calculateNetReturn, adjustForInflation, calculateMonthlySurplus,
+  isFixedCostActive, resolveMonthlyInvestment, projectPatrimonyEvolution,
+  calculateTimeToGoal, simulateImpact, generateId, CURRENCIES, DEFAULT_RATES,
 };
