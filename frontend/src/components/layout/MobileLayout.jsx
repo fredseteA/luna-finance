@@ -30,8 +30,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '../ui/alert-dialog';
-import { SmartAlerts } from '../alerts/SmartAlerts';
-import { Logo, LogoIcon } from '../brand/Logo';
+import { Logo } from '../brand/Logo';
 import { useFinancial } from '../../contexts/FinancialContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { cn } from '../../lib/utils';
@@ -292,11 +291,6 @@ export const MobileLayout = () => {
           </div>
         </div>
       </header>
-
-      {/* Smart Alerts */}
-      <div className="px-4 pt-3">
-        <SmartAlerts />
-      </div>
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto pb-20 px-4 pt-2">

@@ -2,7 +2,6 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Settings, Percent, DollarSign, Palette, RotateCcw } from 'lucide-react';
 import { RealisticSettings } from '../components/settings/RealisticSettings';
-import { ExportData } from '../components/export/ExportData';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Separator } from '../components/ui/separator';
@@ -188,11 +187,6 @@ export const ConfiguracoesPage = () => {
       {/* Market Rates */}
       <motion.div variants={itemVariants}>
         <RealisticSettings />
-      </motion.div>
-
-      {/* Export */}
-      <motion.div variants={itemVariants}>
-        <ExportData />
       </motion.div>
 
       {/* About */}

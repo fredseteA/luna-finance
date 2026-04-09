@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
-import { SmartAlerts } from '../alerts/SmartAlerts';
 import { cn } from '../../lib/utils';
 
 export const AppLayout = () => {
@@ -23,11 +22,6 @@ export const AppLayout = () => {
         )}
       >
         <div className="container mx-auto px-6">
-          {/* Global Alerts */}
-          <div className="mb-6">
-            <SmartAlerts />
-          </div>
-          
           {/* Page Content */}
           <Outlet />
         </div>
