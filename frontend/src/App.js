@@ -1,11 +1,14 @@
 import React from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from './contexts/AuthContext';
+import { useAuth } from "./contexts/AuthContext";
 import { FinancialProvider } from "./contexts/FinancialContext";
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { MobileLayout } from "./components/layout/MobileLayout";
 import { LoginPage } from './pages/LoginPage';
+import PayWallPage from "./pages/PayWallPage";         // default export
+import PaymentSuccessPage from "./pages/PaymentSuccessPage"; // ← sem chaves
 import { HomePage } from "./pages/HomePage";
 import { PlanejamentoPage } from "./pages/PlanejamentoPage";
 import { PaymentSourcesPage } from './pages/PaymentSourcesPage';
@@ -17,12 +20,26 @@ import { CenariosPage } from "./pages/CenariosPage";
 import { ConfiguracoesPage } from "./pages/ConfiguracoesPage";
 import { Toaster } from "./components/ui/sonner";
 
+function PaywallEntry() {
+  const { user, isPremium, loading } = useAuth();
+  if (loading)
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-pulse">Carregando...</div>
+      </div>
+    );
+  if (user && isPremium) return <Navigate to="/" replace />;
+  return <PayWallPage />;
+}
+
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/paywall" element={<PaywallEntry />} />
+          <Route path="/payment/success" element={<PaymentSuccessPage />} />
           <Route
             path="/*"
             element={
