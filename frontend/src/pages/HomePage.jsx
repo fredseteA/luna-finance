@@ -14,6 +14,7 @@ import { useGreeting } from '../hooks/useGreeting';
 import { usePageVariants } from '../lib/animationVariants';
 import { DashboardEmpty } from '../components/dashboard/DashboardEmpty';
 import { Card, CardContent } from '../components/ui/card';
+import { AllTransactionsModal } from '@/components/modal/AllTransactionsModal';
 
 // ─── Categorias de gasto ──────────────────────────────────────────────────────
 
@@ -500,6 +501,7 @@ export const HomePage = () => {
     totalOwnSourcesThisMonth,
   } = useFinancial();
 
+  const [showAllTransactions, setShowAllTransactions] = useState(false);
   const { container, item } = usePageVariants();
   const { greeting, subtitle } = useGreeting(user?.displayName);
   const [showModal, setShowModal] = useState(false);
@@ -629,12 +631,12 @@ export const HomePage = () => {
                     )}
                   </p>
                   {currentMonthTransactions.length > 5 && (
-                    <Link
-                      to="/planejamento"
+                    <button
+                      onClick={() => setShowAllTransactions(true)}
                       className="text-xs text-primary flex items-center gap-0.5"
                     >
                       ver todos <ChevronRight className="h-3 w-3" />
-                    </Link>
+                    </button>
                   )}
                 </div>
 
@@ -698,6 +700,18 @@ export const HomePage = () => {
             formatCurrency={formatCurrency}
             paymentSources={paymentSources}
             defaultPaymentSource={defaultPaymentSource}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showAllTransactions && (
+          <AllTransactionsModal
+            onClose={() => setShowAllTransactions(false)}
+            transactions={transactions}
+            currentMonthTransactions={currentMonthTransactions}
+            removeTransaction={removeTransaction}
+            formatCurrency={formatCurrency}
+            paymentSources={paymentSources}
           />
         )}
       </AnimatePresence>
