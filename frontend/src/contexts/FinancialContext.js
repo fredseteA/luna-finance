@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useMemo, useCallback, useState, useEffect } from 'react';
+import React, { createContext, useContext, useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import { useTheme } from '../hooks/useTheme';
 import { useAuth } from './AuthContext';
 import { storageService } from '../services/storageService';
@@ -7,7 +7,6 @@ import {
   generateId,
   formatCurrency,
   formatPercentage,
-  CURRENCIES,
   DEFAULT_RATES,
 } from '../services/financialEngine';
 import { generateAlerts, calculateScoreBreakdown, generateSuggestions } from '../services/simulationEngine';
@@ -24,8 +23,6 @@ export const useFinancial = () => {
 
 // ─── Constantes de fonte de pagamento ────────────────────────────────────────
 
-// Templates prontos que o usuário pode usar como ponto de partida.
-// O usuário pode personalizar nome e cor depois de escolher um template.
 export const PAYMENT_SOURCE_TEMPLATES = [
   { type: 'checking',    label: 'Conta Corrente',    icon: 'wallet',      color: '#22c55e' },
   { type: 'credit_card', label: 'Cartão de Crédito', icon: 'credit-card', color: '#3b82f6' },
@@ -35,8 +32,8 @@ export const PAYMENT_SOURCE_TEMPLATES = [
   { type: 'other',       label: 'Outro',              icon: 'more',        color: '#6b7280' },
 ];
 
-// Limites de alerta: dispara quando o gasto da fonte atingir esses percentuais do limit mensal.
-const LIMIT_ALERT_THRESHOLDS = [0.8, 1.0]; // 80% e 100%
+const LIMIT_ALERT_THRESHOLDS = [0.8, 1.0];
+const LOAD_TIMEOUT_MS = 10000;
 
 export const FinancialProvider = ({ children }) => {
   const { user } = useAuth();
@@ -50,8 +47,9 @@ export const FinancialProvider = ({ children }) => {
   const [lifeObjectives, setLifeObjectives]   = useState([]);
   const [dismissedAlerts, setDismissedAlerts] = useState([]);
   const [transactions, setTransactions]       = useState([]);
-  const [paymentSources, setPaymentSources]   = useState([]);   // ← NOVO
+  const [paymentSources, setPaymentSources]   = useState([]);
   const [isLoaded, setIsLoaded]               = useState(false);
+  const isInitialLoadRef = useRef(true);
 
   const { theme, toggleTheme, isDark, mounted: themeMounted, setTheme } = useTheme(settings.theme);
 
@@ -60,38 +58,56 @@ export const FinancialProvider = ({ children }) => {
   useEffect(() => {
     if (!uid) {
       setIsLoaded(false);
+      isInitialLoadRef.current = true;
       return;
     }
 
     const loadData = async () => {
       setIsLoaded(false);
-      const [
-        storedSettings,
-        storedFinancialData,
-        storedScenarios,
-        storedObjectives,
-        storedDismissed,
-        storedTransactions,
-        storedPaymentSources,          // ← NOVO
-      ] = await Promise.all([
-        storageService.getSettings(uid),
-        storageService.getFinancialData(uid),
-        storageService.getScenarios(uid),
-        storageService.getLifeObjectives(uid),
-        storageService.getDismissedAlerts(uid),
-        storageService.getTransactions(uid),
-        storageService.getPaymentSources(uid),  // ← NOVO
-      ]);
+      isInitialLoadRef.current = true;
+      const withTimeout = (promise) =>
+        Promise.race([
+          promise,
+          new Promise((resolve) =>
+            setTimeout(() => resolve(null), LOAD_TIMEOUT_MS)
+          ),
+        ]);
+        
+      try {
+        const [
+          storedSettings,
+          storedFinancialData,
+          storedScenarios,
+          storedObjectives,
+          storedDismissed,
+          storedTransactions,
+          storedPaymentSources,
+        ] = await Promise.all([
+          withTimeout(storageService.getSettings(uid)),
+          withTimeout(storageService.getFinancialData(uid)),
+          withTimeout(storageService.getScenarios(uid)),
+          withTimeout(storageService.getLifeObjectives(uid)),
+          withTimeout(storageService.getDismissedAlerts(uid)),
+          withTimeout(storageService.getTransactions(uid)),
+          withTimeout(storageService.getPaymentSources(uid)),
+        ]);
 
-      if (storedSettings)       setSettings(storedSettings);
-      if (storedFinancialData)  setFinancialData(storedFinancialData);
-      if (storedScenarios)      setScenarios(storedScenarios);
-      if (storedObjectives)     setLifeObjectives(storedObjectives);
-      if (storedDismissed)      setDismissedAlerts(storedDismissed);
-      if (storedTransactions)   setTransactions(storedTransactions);
-      if (storedPaymentSources) setPaymentSources(storedPaymentSources); // ← NOVO
+        if (storedSettings)       setSettings(storedSettings);
+        if (storedFinancialData)  setFinancialData(storedFinancialData);
+        if (storedScenarios)      setScenarios(storedScenarios);
+        if (storedObjectives)     setLifeObjectives(storedObjectives);
+        if (storedDismissed)      setDismissedAlerts(storedDismissed);
+        if (storedTransactions)   setTransactions(storedTransactions);
+        if (storedPaymentSources) setPaymentSources(storedPaymentSources);
 
-      setIsLoaded(true);
+      } catch (error) {
+        console.error('[FinancialContext] Erro ao carregar dados:', error);
+      } finally {
+        setIsLoaded(true);
+        setTimeout(() => {
+          isInitialLoadRef.current = false;
+        }, 1000);
+      }
     };
 
     loadData();
@@ -100,42 +116,52 @@ export const FinancialProvider = ({ children }) => {
   // ─── Sincronização de tema ────────────────────────────────────────────────
 
   useEffect(() => {
-    if (isLoaded && uid) setSettings(prev => ({ ...prev, theme }));
-  }, [theme]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!isLoaded || !uid) return;
+    setSettings(prev => {
+      if (prev.theme === theme) return prev; 
+      return { ...prev, theme };
+    });
+  }, [theme, isLoaded, uid]);
 
   useEffect(() => {
-    if (isLoaded && settings.theme) setTheme(settings.theme);
-  }, [isLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!isLoaded || !settings.theme) return;
+    setTheme(settings.theme);
+  }, [isLoaded, settings.theme]);
 
-  // ─── Persistência ────────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (isLoaded && uid) storageService.saveSettings(uid, settings);
+    if (isLoaded && uid && !isInitialLoadRef.current)
+      storageService.saveSettings(uid, settings);
   }, [settings, isLoaded, uid]);
 
   useEffect(() => {
-    if (isLoaded && uid) storageService.saveFinancialData(uid, financialData);
+    if (isLoaded && uid && !isInitialLoadRef.current)
+      storageService.saveFinancialData(uid, financialData);
   }, [financialData, isLoaded, uid]);
 
   useEffect(() => {
-    if (isLoaded && uid) storageService.saveScenarios(uid, scenarios);
+    if (isLoaded && uid && !isInitialLoadRef.current)
+      storageService.saveScenarios(uid, scenarios);
   }, [scenarios, isLoaded, uid]);
 
   useEffect(() => {
-    if (isLoaded && uid) storageService.saveLifeObjectives(uid, lifeObjectives);
+    if (isLoaded && uid && !isInitialLoadRef.current)
+      storageService.saveLifeObjectives(uid, lifeObjectives);
   }, [lifeObjectives, isLoaded, uid]);
 
   useEffect(() => {
-    if (isLoaded && uid) storageService.saveDismissedAlerts(uid, dismissedAlerts);
+    if (isLoaded && uid && !isInitialLoadRef.current)
+      storageService.saveDismissedAlerts(uid, dismissedAlerts);
   }, [dismissedAlerts, isLoaded, uid]);
 
   useEffect(() => {
-    if (isLoaded && uid) storageService.saveTransactions(uid, transactions);
+    if (isLoaded && uid && !isInitialLoadRef.current)
+      storageService.saveTransactions(uid, transactions);
   }, [transactions, isLoaded, uid]);
 
-  // ← NOVO: persiste paymentSources
   useEffect(() => {
-    if (isLoaded && uid) storageService.savePaymentSources(uid, paymentSources);
+    if (isLoaded && uid && !isInitialLoadRef.current)
+      storageService.savePaymentSources(uid, paymentSources);
   }, [paymentSources, isLoaded, uid]);
 
   // ─── Settings ─────────────────────────────────────────────────────────────
@@ -267,9 +293,6 @@ export const FinancialProvider = ({ children }) => {
   }, []);
 
   // ─── Transactions ─────────────────────────────────────────────────────────
-  // Lançamentos pontuais do dia a dia.
-  // Estrutura: { id, description, amount, category, date, sourceId, createdAt }
-  // sourceId é opcional — null significa "sem fonte específica".
 
   const addTransaction = useCallback((transaction) => {
     const now = new Date();
@@ -281,7 +304,7 @@ export const FinancialProvider = ({ children }) => {
         sourceId:  transaction.sourceId || null,
         createdAt: now.toISOString(),
       },
-      ...prev, // mais recente primeiro
+      ...prev,
     ]);
   }, []);
 
@@ -289,50 +312,34 @@ export const FinancialProvider = ({ children }) => {
     setTransactions(prev => prev.filter(t => t.id !== id));
   }, []);
 
-  // Transactions do mês atual (YYYY-MM)
   const currentMonthTransactions = useMemo(() => {
     const currentMonth = new Date().toISOString().slice(0, 7);
     return transactions.filter(t => t.date?.startsWith(currentMonth));
   }, [transactions]);
 
-  // Total gasto em lançamentos no mês atual (todas as fontes)
   const totalTransactionsThisMonth = useMemo(() => {
     return currentMonthTransactions.reduce((sum, t) => sum + (t.amount || 0), 0);
   }, [currentMonthTransactions]);
 
-  // ─── NOVO: Payment Sources ────────────────────────────────────────────────
-  // Fontes de pagamento: conta própria, cartão de terceiro, pix, etc.
-  // Estrutura: {
-  //   id, name, type, owner, ownerName, color,
-  //   isDefault, includeInProjection, monthlyLimit
-  // }
+  // ─── Payment Sources ──────────────────────────────────────────────────────
 
   const addPaymentSource = useCallback((source) => {
     setPaymentSources(prev => {
-      // Se for marcado como default, remove o default das outras
       const updated = source.isDefault
         ? prev.map(s => ({ ...s, isDefault: false }))
         : prev;
-
       return [
         ...updated,
-        {
-          ...source,
-          id:        generateId(),
-          createdAt: new Date().toISOString(),
-        },
+        { ...source, id: generateId(), createdAt: new Date().toISOString() },
       ];
     });
   }, []);
 
   const updatePaymentSource = useCallback((id, updates) => {
     setPaymentSources(prev => {
-      // Se está setando isDefault = true, remove das outras
       if (updates.isDefault) {
         return prev.map(s =>
-          s.id === id
-            ? { ...s, ...updates }
-            : { ...s, isDefault: false }
+          s.id === id ? { ...s, ...updates } : { ...s, isDefault: false }
         );
       }
       return prev.map(s => s.id === id ? { ...s, ...updates } : s);
@@ -343,14 +350,9 @@ export const FinancialProvider = ({ children }) => {
     setPaymentSources(prev => prev.filter(s => s.id !== id));
   }, []);
 
-  // Fonte padrão (usada no modal quando nenhuma é selecionada)
   const defaultPaymentSource = useMemo(() => {
     return paymentSources.find(s => s.isDefault) || paymentSources[0] || null;
   }, [paymentSources]);
-
-  // ─── NOVO: Gastos por fonte no mês atual ─────────────────────────────────
-  // Retorna um Map de sourceId → total gasto no mês.
-  // Transactions sem sourceId ficam em key null.
 
   const spentBySourceThisMonth = useMemo(() => {
     const map = new Map();
@@ -361,49 +363,34 @@ export const FinancialProvider = ({ children }) => {
     return map;
   }, [currentMonthTransactions]);
 
-  // ─── NOVO: Alertas de limite por fonte ───────────────────────────────────
-  // Gera alertas quando uma fonte com monthlyLimit atinge 80% ou 100%.
-
   const sourceLimitAlerts = useMemo(() => {
-    const alerts = [];
-
+    const result = [];
     paymentSources.forEach(source => {
       if (!source.monthlyLimit || source.monthlyLimit <= 0) return;
-
       const spent = spentBySourceThisMonth.get(source.id) || 0;
       const ratio = spent / source.monthlyLimit;
-
       LIMIT_ALERT_THRESHOLDS.forEach(threshold => {
         if (ratio >= threshold) {
-          alerts.push({
-            id:        `source-limit-${source.id}-${threshold}`,
-            sourceId:  source.id,
+          result.push({
+            id:         `source-limit-${source.id}-${threshold}`,
+            sourceId:   source.id,
             sourceName: source.name,
             threshold,
             spent,
-            limit:     source.monthlyLimit,
+            limit:      source.monthlyLimit,
             ratio,
-            // 80% = warning, 100% = danger
-            level:     threshold >= 1.0 ? 'danger' : 'warning',
+            level:      threshold >= 1.0 ? 'danger' : 'warning',
           });
         }
       });
     });
-
-    return alerts;
+    return result;
   }, [paymentSources, spentBySourceThisMonth]);
-
-  // ─── NOVO: Total gasto apenas de fontes incluídas na projeção ─────────────
-  // Usado para calcular o termômetro do "seu dinheiro" (excluindo cartão do pai, etc.)
 
   const totalOwnSourcesThisMonth = useMemo(() => {
     const ownSourceIds = new Set(
-      paymentSources
-        .filter(s => s.includeInProjection)
-        .map(s => s.id)
+      paymentSources.filter(s => s.includeInProjection).map(s => s.id)
     );
-
-    // Inclui também transactions sem sourceId (consideradas da conta própria)
     return currentMonthTransactions
       .filter(t => !t.sourceId || ownSourceIds.has(t.sourceId))
       .reduce((sum, t) => sum + (t.amount || 0), 0);
@@ -413,6 +400,7 @@ export const FinancialProvider = ({ children }) => {
 
   const resetAll = useCallback(async () => {
     await storageService.clearAll(uid);
+    isInitialLoadRef.current = true; // ← antes do setIsLoaded
     setSettings(storageService.getDefaultSettings());
     setFinancialData(storageService.getDefaultFinancialData());
     setScenarios([]);
@@ -428,18 +416,18 @@ export const FinancialProvider = ({ children }) => {
   const projection = useMemo(() => {
     if (!financialData.monthlyIncome || financialData.durationMonths <= 0) return [];
     return projectPatrimonyEvolution({
-      startDate:        financialData.startDate || new Date().toISOString().slice(0, 7),
-      durationMonths:   financialData.durationMonths || 12,
-      initialPatrimony: financialData.initialPatrimony || 0,
-      monthlyIncome:    financialData.monthlyIncome,
-      fixedCosts:       financialData.fixedCosts || [],
-      variableExpenses: financialData.variableExpenses || [],
-      allocation:       financialData.allocation || { cdi: 25, selic: 25, cdb: 25, fii: 25 },
-      rates:            settings.rates || DEFAULT_RATES,
-      reinvestFii:      financialData.reinvestFii ?? true,
+      startDate:         financialData.startDate || new Date().toISOString().slice(0, 7),
+      durationMonths:    financialData.durationMonths || 12,
+      initialPatrimony:  financialData.initialPatrimony || 0,
+      monthlyIncome:     financialData.monthlyIncome,
+      fixedCosts:        financialData.fixedCosts || [],
+      variableExpenses:  financialData.variableExpenses || [],
+      allocation:        financialData.allocation || { cdi: 25, selic: 25, cdb: 25, fii: 25 },
+      rates:             settings.rates || DEFAULT_RATES,
+      reinvestFii:       financialData.reinvestFii ?? true,
       surplusAllocation: financialData.surplusAllocation,
-      inflation:        settings.inflation || 0,
-      taxes:            settings.taxes || { enabled: true, fiiExempt: true },
+      inflation:         settings.inflation || 0,
+      taxes:             settings.taxes || { enabled: true, fiiExempt: true },
     });
   }, [financialData, settings.rates, settings.inflation, settings.taxes]);
 
@@ -455,16 +443,16 @@ export const FinancialProvider = ({ children }) => {
 
     if (projection.length === 0) {
       return {
-        currentPatrimony:      financialData.initialPatrimony || 0,
-        projectedPatrimony:    financialData.initialPatrimony || 0,
+        currentPatrimony:       financialData.initialPatrimony || 0,
+        projectedPatrimony:     financialData.initialPatrimony || 0,
         projectedPatrimonyReal: financialData.initialPatrimony || 0,
-        totalGrowth:           0,
-        totalGrowthPercentage: 0,
-        totalContributions:    0,
-        totalReturns:          0,
-        monthlySurplus:        calculatedSurplus,
-        savingsRate:           calculatedSavingsRate,
-        inflationImpact:       0,
+        totalGrowth:            0,
+        totalGrowthPercentage:  0,
+        totalContributions:     0,
+        totalReturns:           0,
+        monthlySurplus:         calculatedSurplus,
+        savingsRate:            calculatedSavingsRate,
+        inflationImpact:        0,
       };
     }
 
@@ -499,7 +487,7 @@ export const FinancialProvider = ({ children }) => {
     }, projection);
   }, [financialData, settings.rates, projection]);
 
-  // ─── Alerts (sistema + limites de fonte) ──────────────────────────────────
+  // ─── Alerts ───────────────────────────────────────────────────────────────
 
   const alerts = useMemo(() => {
     return generateAlerts({
@@ -520,23 +508,18 @@ export const FinancialProvider = ({ children }) => {
   // ─── Context value ────────────────────────────────────────────────────────
 
   const value = {
-    // Auth
     user,
-
-    // Settings
     settings,
     updateSettings,
     updateRates,
     currency: settings.currency,
     setCurrency: (currency) => updateSettings({ currency }),
-
-    // Theme
     theme,
     toggleTheme,
     isDark,
-    mounted: themeMounted && isLoaded,
+    mounted: isLoaded,        
+    themeMounted,
 
-    // Financial data
     financialData,
     updateFinancialData,
     addFixedCost,
@@ -546,33 +529,23 @@ export const FinancialProvider = ({ children }) => {
     updateVariableExpense,
     removeVariableExpense,
     updateAllocation,
-
-    // Scenarios
     scenarios,
     saveScenario,
     loadScenario,
     deleteScenario,
-
-    // Life objectives
     lifeObjectives,
     addLifeObjective,
     updateLifeObjective,
     removeLifeObjective,
-
-    // Alerts
     alerts,
     dismissedAlerts,
     dismissAlert,
     clearDismissedAlerts,
-
-    // Transactions
     transactions,
     addTransaction,
     removeTransaction,
     currentMonthTransactions,
     totalTransactionsThisMonth,
-
-    // Payment Sources ← NOVO
     paymentSources,
     addPaymentSource,
     updatePaymentSource,
@@ -581,17 +554,11 @@ export const FinancialProvider = ({ children }) => {
     spentBySourceThisMonth,
     sourceLimitAlerts,
     totalOwnSourcesThisMonth,
-
-    // Calculations
     projection,
     summary,
     scoreBreakdown,
     suggestions,
-
-    // Reset
     resetAll,
-
-    // Utilities
     formatCurrency: (value) => formatCurrency(value, settings.currency),
     formatPercentage,
   };
