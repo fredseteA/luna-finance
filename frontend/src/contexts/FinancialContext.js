@@ -126,6 +126,7 @@ export const FinancialProvider = ({ children }) => {
   useEffect(() => {
     if (!isLoaded || !settings.theme) return;
     setTheme(settings.theme);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded, settings.theme]);
 
 
