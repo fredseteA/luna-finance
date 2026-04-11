@@ -54,64 +54,65 @@ export const FinancialProvider = ({ children }) => {
   const { theme, toggleTheme, isDark, mounted: themeMounted, setTheme } = useTheme(settings.theme);
 
   // ─── Carrega dados do Firestore ───────────────────────────────────────────
+  const loadData = useCallback(async () => {
+    if (!uid) return;
+    // só reseta isLoaded se ainda não carregou nada
+    if (!isLoaded) setIsLoaded(false);
+    isInitialLoadRef.current = true;
 
+    const withTimeout = (promise) =>
+      Promise.race([
+        promise,
+        new Promise((resolve) => setTimeout(() => resolve(null), LOAD_TIMEOUT_MS)),
+      ]);
+
+    try {
+      const [
+        storedSettings,
+        storedFinancialData,
+        storedScenarios,
+        storedObjectives,
+        storedDismissed,
+        storedTransactions,
+        storedPaymentSources,
+      ] = await Promise.all([
+        withTimeout(storageService.getSettings(uid)),
+        withTimeout(storageService.getFinancialData(uid)),
+        withTimeout(storageService.getScenarios(uid)),
+        withTimeout(storageService.getLifeObjectives(uid)),
+        withTimeout(storageService.getDismissedAlerts(uid)),
+        withTimeout(storageService.getTransactions(uid)),
+        withTimeout(storageService.getPaymentSources(uid)),
+      ]);
+
+      if (storedSettings)       setSettings(storedSettings);
+      if (storedFinancialData)  setFinancialData(storedFinancialData);
+      if (storedScenarios)      setScenarios(storedScenarios);
+      if (storedObjectives)     setLifeObjectives(storedObjectives);
+      if (storedDismissed)      setDismissedAlerts(storedDismissed);
+      if (storedTransactions)   setTransactions(storedTransactions);
+      if (storedPaymentSources) setPaymentSources(storedPaymentSources);
+
+    } catch (error) {
+      console.error('[FinancialContext] Erro ao carregar dados:', error);
+    } finally {
+      setIsLoaded(true);
+      setTimeout(() => {
+        isInitialLoadRef.current = false;
+      }, 1000);
+    }
+  }, [uid]);
+
+  // Dispara o carregamento quando uid muda
   useEffect(() => {
     if (!uid) {
       setIsLoaded(false);
       isInitialLoadRef.current = true;
       return;
     }
-
-    const loadData = async () => {
-      setIsLoaded(false);
-      isInitialLoadRef.current = true;
-      const withTimeout = (promise) =>
-        Promise.race([
-          promise,
-          new Promise((resolve) =>
-            setTimeout(() => resolve(null), LOAD_TIMEOUT_MS)
-          ),
-        ]);
-        
-      try {
-        const [
-          storedSettings,
-          storedFinancialData,
-          storedScenarios,
-          storedObjectives,
-          storedDismissed,
-          storedTransactions,
-          storedPaymentSources,
-        ] = await Promise.all([
-          withTimeout(storageService.getSettings(uid)),
-          withTimeout(storageService.getFinancialData(uid)),
-          withTimeout(storageService.getScenarios(uid)),
-          withTimeout(storageService.getLifeObjectives(uid)),
-          withTimeout(storageService.getDismissedAlerts(uid)),
-          withTimeout(storageService.getTransactions(uid)),
-          withTimeout(storageService.getPaymentSources(uid)),
-        ]);
-
-        if (storedSettings)       setSettings(storedSettings);
-        if (storedFinancialData)  setFinancialData(storedFinancialData);
-        if (storedScenarios)      setScenarios(storedScenarios);
-        if (storedObjectives)     setLifeObjectives(storedObjectives);
-        if (storedDismissed)      setDismissedAlerts(storedDismissed);
-        if (storedTransactions)   setTransactions(storedTransactions);
-        if (storedPaymentSources) setPaymentSources(storedPaymentSources);
-
-      } catch (error) {
-        console.error('[FinancialContext] Erro ao carregar dados:', error);
-      } finally {
-        setIsLoaded(true);
-        setTimeout(() => {
-          isInitialLoadRef.current = false;
-        }, 1000);
-      }
-    };
-
     loadData();
-  }, [uid]);
+  }, [uid, loadData]);
+
 
   // ─── Sincronização de tema ────────────────────────────────────────────────
 
@@ -518,7 +519,8 @@ export const FinancialProvider = ({ children }) => {
     theme,
     toggleTheme,
     isDark,
-    mounted: isLoaded,        
+    mounted: isLoaded,  
+    isLoaded,       
     themeMounted,
 
     financialData,

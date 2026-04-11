@@ -387,12 +387,12 @@ const AllocationAdviceCard = ({ advice, formatCurrency }) => {
 export const InvestimentosPage = () => {
   const {
     mounted,
+    isLoaded,
     financialData,
     settings,
     formatCurrency,
     projection,
   } = useFinancial();
-
   const { container, item } = usePageVariants();
 
   // ── Gera o relatório de insights (lógica pura, memoizado) ─────────────────
@@ -401,28 +401,28 @@ export const InvestimentosPage = () => {
     return buildInsightReport(financialData, settings, projection);
   }, [financialData, settings, projection]);
 
-  if (!mounted) return <InvestimentosSkeleton />;
+if (!isLoaded) return <InvestimentosSkeleton />;
 
-  const hasData = financialData.monthlyIncome > 0 || financialData.initialPatrimony > 0;
+const hasData = financialData.monthlyIncome > 0 || financialData.initialPatrimony > 0;
 
-  if (!hasData) {
-    return (
-      <motion.div variants={container} initial="hidden" animate="visible" className="space-y-4 pb-4">
-        <motion.div variants={item} className="pt-2">
-          <h1 className="text-xl font-bold">Investimentos</h1>
-          <p className="text-sm text-muted-foreground">Configure sua carteira</p>
-        </motion.div>
-        <motion.div variants={item}><InvestimentosEmpty /></motion.div>
+if (hasData && !report) return <InvestimentosSkeleton />;
+if (!hasData) {
+  return (
+    <motion.div variants={container} initial="hidden" animate="visible" className="space-y-4 pb-4">
+      <motion.div variants={item} className="pt-2">
+        <h1 className="text-xl font-bold">Investimentos</h1>
+        <p className="text-sm text-muted-foreground">Configure sua carteira</p>
       </motion.div>
-    );
-  }
+      <motion.div variants={item}><InvestimentosEmpty /></motion.div>
+    </motion.div>
+  );
+}
 
   const { overview, alerts, opportunities, milestones, allocationAdvice, behaviorScore } = report;
 
   // Contadores para badges
   const criticalCount = alerts.filter(a => a.severity === 'critical').length;
   const highOppCount  = opportunities.filter(o => o.urgency === 'high').length;
-
   return (
     <motion.div
       variants={container}

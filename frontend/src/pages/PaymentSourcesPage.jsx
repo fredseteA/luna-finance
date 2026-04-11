@@ -10,7 +10,6 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useFinancial, PAYMENT_SOURCE_TEMPLATES } from '../contexts/FinancialContext';
 import { Card, CardContent } from '../components/ui/card';
-import { usePageVariants } from '../lib/animationVariants';
 
 // ─── Ícone por tipo ───────────────────────────────────────────────────────────
 
@@ -419,7 +418,6 @@ export const PaymentSourcesPage = () => {
   } = useFinancial();
 
   const navigate = useNavigate();
-  const { container, item } = usePageVariants();
 
   const [showModal, setShowModal]   = useState(false);
   const [editSource, setEditSource] = useState(null); // fonte sendo editada
