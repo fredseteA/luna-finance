@@ -7,8 +7,8 @@ import { FinancialProvider } from "./contexts/FinancialContext";
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { MobileLayout } from "./components/layout/MobileLayout";
 import { LoginPage } from './pages/LoginPage';
-import PayWallPage from "./pages/PayWallPage";         // default export
-import PaymentSuccessPage from "./pages/PaymentSuccessPage"; // ← sem chaves
+import PayWallPage from "./pages/payWall/PayWallPage";         
+import PaymentSuccessPage from "./pages/PaymentSuccessPage"; 
 import { HomePage } from "./pages/HomePage";
 import { PlanejamentoPage } from "./pages/PlanejamentoPage";
 import { PaymentSourcesPage } from './pages/PaymentSourcesPage';
