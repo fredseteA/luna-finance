@@ -101,7 +101,7 @@ export const FinancialProvider = ({ children }) => {
         isInitialLoadRef.current = false;
       }, 1000);
     }
-  }, [uid]);
+  }, [uid, isLoaded]);
 
   // Dispara o carregamento quando uid muda
   useEffect(() => {
