@@ -1,0 +1,195 @@
+/* ── InstallModal.css ── */
+
+.install-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 0 env(safe-area-inset-bottom, 0);
+  animation: overlayIn 0.2s ease;
+}
+
+@keyframes overlayIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.install-modal {
+  background: var(--card, #1a2e26);
+  border: 1px solid var(--border, rgba(93,202,165,0.15));
+  border-radius: 24px 24px 0 0;
+  padding: 32px 24px 40px;
+  width: 100%;
+  max-width: 480px;
+  position: relative;
+  animation: modalUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes modalUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.install-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted, #7ab89a);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.install-close:hover { background: rgba(255,255,255,0.1); }
+
+.install-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: rgba(29,158,117,0.15);
+  border: 1px solid rgba(93,202,165,0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent, #5DCAA5);
+  margin-bottom: 20px;
+}
+
+.install-title {
+  font-family: 'Sora', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 10px;
+  letter-spacing: -0.02em;
+}
+
+.install-desc {
+  font-size: 14px;
+  color: var(--muted, #7ab89a);
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+.install-desc strong { color: #fff; }
+
+.install-benefits {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 28px;
+}
+
+.install-benefits li {
+  font-size: 14px;
+  color: var(--text, #f0faf6);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Steps (instruções) ── */
+.install-steps {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 20px;
+  counter-reset: steps;
+}
+
+.install-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 14px;
+  color: var(--text, #f0faf6);
+  line-height: 1.5;
+}
+
+.install-steps li span {
+  color: var(--muted, #7ab89a);
+  font-size: 13px;
+}
+
+.install-steps li strong { color: #fff; }
+
+.step-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: rgba(29,158,117,0.15);
+  border: 1px solid rgba(93,202,165,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent, #5DCAA5);
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.install-note {
+  font-size: 12px;
+  color: var(--muted, #7ab89a);
+  background: rgba(255,180,0,0.07);
+  border: 1px solid rgba(255,180,0,0.15);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+/* ── Actions ── */
+.install-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.install-btn-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  background: var(--green, #1D9E75);
+  color: #fff;
+  font-family: 'Sora', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  padding: 16px 24px;
+  border-radius: 14px;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.15s, opacity 0.15s;
+}
+
+.install-btn-primary:active { transform: scale(0.98); }
+.install-btn-primary:hover  { opacity: 0.9; }
+
+.install-btn-ghost {
+  width: 100%;
+  background: transparent;
+  color: var(--muted, #7ab89a);
+  font-size: 14px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border, rgba(93,202,165,0.15));
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.install-btn-ghost:hover { background: rgba(255,255,255,0.04); }
