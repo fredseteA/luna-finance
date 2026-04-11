@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -15,6 +15,7 @@ import {
   KeyRound,
   Trash2,
   User,
+  Download,
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '../ui/sheet';
@@ -39,6 +40,8 @@ import {
   reauthenticateWithCredential,
 } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
+import { useInstallPrompt } from '../../hooks/useInstallPrompt';
+import { InstallModal } from '../install/InstallModal';
 
 const mainNavItems = [
   { path: '/', label: 'Home', icon: LayoutDashboard },
@@ -61,19 +64,29 @@ export const MobileLayout = () => {
   const { theme, toggleTheme, currency, resetAll } = useFinancial();
   const { user, logout } = useAuth();
 
-  // Trocar senha
+  // ── Install prompt ──────────────────────────────────────────────────────────
+  const { canInstall, isInstalled, platform, triggerInstall, markAsInstalled } = useInstallPrompt();
+  const [showInstallModal, setShowInstallModal] = useState(false);
+
+  useEffect(() => {
+    if (user && canInstall && !isInstalled) {
+      const t = setTimeout(() => setShowInstallModal(true), 1500);
+      return () => clearTimeout(t);
+    }
+  }, [user, canInstall, isInstalled]);
+
+  // ── Trocar senha ────────────────────────────────────────────────────────────
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState(false);
 
-  // Excluir conta
+  // ── Excluir conta ───────────────────────────────────────────────────────────
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteError, setDeleteError] = useState('');
 
-  // Verifica se o login foi por email/senha ou Google
   const isEmailProvider = user?.providerData?.some(p => p.providerId === 'password');
 
   const handleLogout = async () => {
@@ -108,19 +121,16 @@ export const MobileLayout = () => {
   const handleDeleteAccount = async () => {
     setDeleteError('');
     try {
-      // Reautentica email/senha
       if (isEmailProvider) {
         const credential = EmailAuthProvider.credential(user.email, deletePassword);
         await reauthenticateWithCredential(auth.currentUser, credential);
       } else {
-        // Reautentica Google
         const { GoogleAuthProvider, reauthenticateWithPopup } = await import('firebase/auth');
         const provider = new GoogleAuthProvider();
         await reauthenticateWithPopup(auth.currentUser, provider);
       }
-
-      await resetAll();           // limpa Firestore
-      await deleteUser(auth.currentUser); // deleta a conta
+      await resetAll();
+      await deleteUser(auth.currentUser);
       navigate('/login');
     } catch (e) {
       if (e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') {
@@ -264,6 +274,19 @@ export const MobileLayout = () => {
 
                   {/* Footer */}
                   <div className="p-4 border-t border-border/40 space-y-2">
+
+                    {/* Botão instalar app — aparece se não instalado */}
+                    {canInstall && !isInstalled && (
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start"
+                        onClick={() => { setShowInstallModal(true); setMenuOpen(false); }}
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Instalar app
+                      </Button>
+                    )}
+
                     <Button
                       variant="outline"
                       className="w-full justify-start"
@@ -326,6 +349,16 @@ export const MobileLayout = () => {
           </div>
         </div>
       </nav>
+
+      {/* Modal: Instalar App */}
+      {showInstallModal && (
+        <InstallModal
+          platform={platform}
+          triggerInstall={triggerInstall}
+          markAsInstalled={markAsInstalled}
+          onClose={() => setShowInstallModal(false)}
+        />
+      )}
 
       {/* Modal: Trocar Senha */}
       <AlertDialog open={showChangePassword} onOpenChange={setShowChangePassword}>

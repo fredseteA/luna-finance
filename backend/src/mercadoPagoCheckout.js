@@ -16,8 +16,8 @@ async function createPreference({ uid }) {
   }
 
   const accessToken = requireEnv("MERCADOPAGO_ACCESS_TOKEN");
-  const publicBaseUrl = requireEnv("PUBLIC_BASE_URL"); // ex: https://seu-dominio.com
-  const backendBaseUrl = requireEnv("BACKEND_BASE_URL"); // ex: https://api.seu-dominio.com
+  const publicBaseUrl = requireEnv("PUBLIC_BASE_URL");
+  const backendBaseUrl = requireEnv("BACKEND_BASE_URL");
 
   const payload = {
     items: [
@@ -32,7 +32,7 @@ async function createPreference({ uid }) {
     notification_url: `${backendBaseUrl}/webhook/mercadopago`,
     back_urls: {
       success: `${publicBaseUrl}/payment/success`,
-      pending: `${publicBaseUrl}/paywall`,
+      pending: `${publicBaseUrl}/payment/success`, 
       failure: `${publicBaseUrl}/paywall`,
     },
     auto_return: "approved",
@@ -59,4 +59,3 @@ async function createPreference({ uid }) {
 }
 
 module.exports = { createPreference };
-
