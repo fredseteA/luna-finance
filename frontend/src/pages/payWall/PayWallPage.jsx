@@ -1,0 +1,393 @@
+import "./paywall.css";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../contexts/AuthContext";
+
+import homeImg      from "@/assets/home.png";
+import investirImg  from "@/assets/investir.png";
+import simulacoesImg from "@/assets/simulacoes.png";
+import analisesImg  from "@/assets/analises.png";
+import relatorioImg from "@/assets/relatorio.png";
+
+const BACKEND_URL =
+  process.env.REACT_APP_BACKEND_URL ||
+  process.env.REACT_APP_BACKEND_BASE_URL ||
+  "http://localhost:4000";
+
+export default function PayWallPage() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function handleCheckout(e) {
+    e.preventDefault();
+    if (!user) {
+      navigate("/login");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const resp = await fetch(`${BACKEND_URL}/checkout/mercadopago/preference`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uid: user.uid }),
+      });
+      if (!resp.ok) throw new Error("Não foi possível iniciar o pagamento. Tente novamente.");
+      const data = await resp.json();
+      const checkoutUrl =
+        process.env.NODE_ENV === "production"
+          ? data.init_point
+          : data.sandbox_init_point;
+      if (!checkoutUrl) throw new Error("URL de checkout não encontrada.");
+      window.location.href = checkoutUrl;
+    } catch (err) {
+      setError(err.message || "Erro inesperado. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const CheckoutButton = ({ label }) => (
+    <div className="cta-block">
+      {error && <p className="error-msg">{error}</p>}
+      <a href="#cta" className="btn-primary" onClick={handleCheckout} aria-disabled={loading}>
+        {loading ? "Aguarde..." : label || "Liberar acesso agora →"}
+      </a>
+      <p className="btn-guarantee">7 dias de garantia · sem perguntas · risco zero</p>
+    </div>
+  );
+
+  return (
+    <>
+      {/* ══════════════════════════════════════════
+          HERO
+      ═════════════════════════════════════════════ */}
+      <section className="hero">
+        <div className="container">
+          <div className="hero-badge fade-up fade-up-1">
+            Acesso vitalício por R$15
+          </div>
+
+          <h1 className="fade-up fade-up-2">
+            Pare de adivinhar.<br />
+            <em>Saiba exatamente</em><br />
+            onde vai seu dinheiro.
+          </h1>
+
+          <p className="fade-up fade-up-3">
+            Luna Finance transforma a bagunça financeira em clareza total —
+            em minutos, não em planilhas.
+          </p>
+
+          {/* HERO — imagem do home */}
+          <div className="hero-phone fade-up fade-up-3">
+            <div className="hero-phone-glow" />
+            <img src={homeImg} alt="Luna Finance — tela inicial" className="hero-phone-img" />
+          </div>
+
+          <div className="price-badge fade-up fade-up-3">
+            <div className="price-main"><span>R$</span>15</div>
+            <div className="price-sub">PAGAMENTO ÚNICO · ACESSO VITALÍCIO</div>
+          </div>
+
+          <CheckoutButton label="Liberar acesso agora →" />
+        </div>
+      </section>
+
+      <div className="section-divider" />
+
+      {/* ══════════════════════════════════════════
+          PROBLEMA
+      ═════════════════════════════════════════════ */}
+      <section className="problema">
+        <div className="container">
+          <p className="section-label">Você se reconhece nisso?</p>
+          <h2>Fim do mês chegou.<br />O dinheiro sumiu.</h2>
+          <ul className="pain-list">
+            <li className="pain-item">
+              <div className="pain-icon">✕</div>
+              Você ganha, paga as contas, e o que sobra some — sem saber para onde foi.
+            </li>
+            <li className="pain-item">
+              <div className="pain-icon">✕</div>
+              Você tenta controlar pelo extrato bancário, mas é impossível entender o padrão.
+            </li>
+            <li className="pain-item">
+              <div className="pain-icon">✕</div>
+              Já tentou planilha, já tentou app complicado — nada grudou por mais de uma semana.
+            </li>
+            <li className="pain-item">
+              <div className="pain-icon">✕</div>
+              Você sente que deveria estar guardando mais, mas não sabe exatamente quanto nem como.
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <div className="section-divider" />
+
+      {/* ══════════════════════════════════════════
+          FUNCIONALIDADES — SHOWCASE DAS TELAS
+      ═════════════════════════════════════════════ */}
+
+      {/* 1. Controle financeiro — home */}
+      <section className="feature-showcase">
+        <div className="container">
+          <div className="showcase-text">
+            <p className="section-label">Controle financeiro</p>
+            <h2>Seu dinheiro,<br />numa só tela.</h2>
+            <p>
+              Veja patrimônio, sobra mensal, gastos e crescimento assim que abrir
+              o app. Sem navegar, sem procurar — tudo no dashboard.
+            </p>
+            <ul className="showcase-checks">
+              <li>Patrimônio projetado em tempo real</li>
+              <li>Sobra mensal calculada automaticamente</li>
+              <li>Gastos fixos e variáveis separados</li>
+            </ul>
+          </div>
+          <div className="showcase-phone">
+            <div className="showcase-glow showcase-glow--green" />
+            <img src={homeImg} alt="Tela de controle financeiro" className="showcase-img" />
+          </div>
+        </div>
+      </section>
+
+      <div className="section-divider" />
+
+      {/* 2. Investimentos */}
+      <section className="feature-showcase feature-showcase--reverse">
+        <div className="container">
+          <div className="showcase-text">
+            <p className="section-label">Investimentos</p>
+            <h2>Veja sua carteira<br />crescer de verdade.</h2>
+            <p>
+              Monte sua carteira com CDI, Selic, CDB e FII. O app calcula o
+              rendimento real com IR regressivo incluso — sem enganação.
+            </p>
+            <ul className="showcase-checks">
+              <li>Composição da carteira por tipo</li>
+              <li>Projeção de patrimônio mês a mês</li>
+              <li>Cálculo de IR regressivo automático</li>
+            </ul>
+          </div>
+          <div className="showcase-phone">
+            <div className="showcase-glow showcase-glow--blue" />
+            <img src={investirImg} alt="Tela de investimentos" className="showcase-img" />
+          </div>
+        </div>
+      </section>
+
+      <div className="section-divider" />
+
+      {/* 3. Simulações */}
+      <section className="feature-showcase">
+        <div className="container">
+          <div className="showcase-text">
+            <p className="section-label">Simulações</p>
+            <h2>E se eu guardar<br />R$200 a mais?</h2>
+            <p>
+              Simule diferentes cenários e veja o impacto no seu patrimônio.
+              Decida com dados, não com achismo.
+            </p>
+            <ul className="showcase-checks">
+              <li>Simulação de aportes mensais</li>
+              <li>Comparação entre investimentos</li>
+              <li>Projeção de metas financeiras</li>
+            </ul>
+          </div>
+          <div className="showcase-phone">
+            <div className="showcase-glow showcase-glow--purple" />
+            <img src={simulacoesImg} alt="Tela de simulações" className="showcase-img" />
+          </div>
+        </div>
+      </section>
+
+      <div className="section-divider" />
+
+      {/* 4. Análises */}
+      <section className="feature-showcase feature-showcase--reverse">
+        <div className="container">
+          <div className="showcase-text">
+            <p className="section-label">Análises</p>
+            <h2>Entenda onde<br />o dinheiro foi.</h2>
+            <p>
+              Gráficos claros que mostram seus padrões de gasto, evolução do
+              patrimônio e onde você pode melhorar.
+            </p>
+            <ul className="showcase-checks">
+              <li>Gráficos de evolução mensal</li>
+              <li>Análise de padrões de gasto</li>
+              <li>Score de comportamento financeiro</li>
+            </ul>
+          </div>
+          <div className="showcase-phone">
+            <div className="showcase-glow showcase-glow--teal" />
+            <img src={analisesImg} alt="Tela de análises" className="showcase-img" />
+          </div>
+        </div>
+      </section>
+
+      <div className="section-divider" />
+
+      {/* 5. Relatório */}
+      <section className="feature-showcase">
+        <div className="container">
+          <div className="showcase-text">
+            <p className="section-label">Relatórios</p>
+            <h2>Tudo registrado,<br />nada esquecido.</h2>
+            <p>
+              Exporte o resumo do mês em PDF com todos os lançamentos,
+              metas e projeções. Perfeito para acompanhar a evolução.
+            </p>
+            <ul className="showcase-checks">
+              <li>Exportação em PDF completa</li>
+              <li>Histórico de lançamentos</li>
+              <li>Resumo mensal detalhado</li>
+            </ul>
+          </div>
+          <div className="showcase-phone">
+            <div className="showcase-glow showcase-glow--orange" />
+            <img src={relatorioImg} alt="Tela de relatório" className="showcase-img" />
+          </div>
+        </div>
+      </section>
+
+      <div className="section-divider" />
+
+      {/* ══════════════════════════════════════════
+          BENEFÍCIOS
+      ═════════════════════════════════════════════ */}
+      <section className="beneficios">
+        <div className="container">
+          <p className="section-label" style={{ textAlign: "center" }}>O que você tem acesso</p>
+          <h2>Tudo que você precisa.<br />Nada que você não precisa.</h2>
+          <div className="benefit-grid">
+            <div className="benefit-item">
+              <span className="b-icon">📊</span>
+              <h4>Dashboard inteligente</h4>
+              <p>Patrimônio, sobra e crescimento numa só tela.</p>
+            </div>
+            <div className="benefit-item">
+              <span className="b-icon">💳</span>
+              <h4>Fontes de pagamento</h4>
+              <p>Separe gastos por cartão, conta ou benefício.</p>
+            </div>
+            <div className="benefit-item">
+              <span className="b-icon">🎯</span>
+              <h4>Metas financeiras</h4>
+              <p>Define objetivos e acompanha o progresso mês a mês.</p>
+            </div>
+            <div className="benefit-item">
+              <span className="b-icon">📈</span>
+              <h4>Projeção de investimentos</h4>
+              <p>CDI, Selic, CDB e FII com IR real calculado.</p>
+            </div>
+            <div className="benefit-item">
+              <span className="b-icon">🔔</span>
+              <h4>Alertas inteligentes</h4>
+              <p>Avisa antes do limite do cartão estourar.</p>
+            </div>
+            <div className="benefit-item">
+              <span className="b-icon">📄</span>
+              <h4>Relatório em PDF</h4>
+              <p>Exporta o mês completo para compartilhar.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="section-divider" />
+
+      {/* ══════════════════════════════════════════
+          RESULTADO
+      ═════════════════════════════════════════════ */}
+      <section className="resultado">
+        <div className="container">
+          <p className="section-label">O que muda na prática</p>
+          <h2>Em poucos dias você já sente a diferença.</h2>
+          <p>Não é promessa — é o que acontece quando você para de adivinhar e começa a enxergar.</p>
+          <div className="resultado-cards">
+            <div className="resultado-card">
+              <div className="resultado-dot" />
+              <p><strong>No primeiro dia:</strong> você vê pela primeira vez para onde vai cada real que entra na sua conta.</p>
+            </div>
+            <div className="resultado-card">
+              <div className="resultado-dot" />
+              <p><strong>Na primeira semana:</strong> você identifica os gastos que somem sem deixar rastro.</p>
+            </div>
+            <div className="resultado-card">
+              <div className="resultado-dot" />
+              <p><strong>No final do mês:</strong> você chega com sobra — e sabe exatamente quanto pode investir.</p>
+            </div>
+            <div className="resultado-card">
+              <div className="resultado-dot" />
+              <p><strong>Em 3 meses:</strong> você começa a ver seu patrimônio crescer de acordo com a projeção.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="section-divider" />
+
+      {/* ══════════════════════════════════════════
+          PREÇO
+      ═════════════════════════════════════════════ */}
+      <section className="preco">
+        <div className="container">
+          <p className="section-label" style={{ textAlign: "center", marginBottom: 20 }}>Investimento único</p>
+          <div className="preco-card">
+            <div className="preco-tag">Acesso vitalício</div>
+            <div className="preco-numero"><sup>R$</sup>15</div>
+            <p className="preco-tipo">PAGAMENTO ÚNICO · SEM MENSALIDADE</p>
+            <div className="preco-comparacoes">
+              <div className="preco-comp">menos que um lanche no iFood</div>
+              <div className="preco-comp">menos de R$0,05 por dia pelo acesso</div>
+              <div className="preco-comp">menos que qualquer assinatura mensal de app</div>
+            </div>
+            <CheckoutButton label="Liberar acesso agora →" />
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════
+          CTA FINAL
+      ═════════════════════════════════════════════ */}
+      <section className="cta-final" id="cta">
+        <div className="container">
+          <h2>Chega de mês<br />terminando no <em>vermelho.</em></h2>
+          <p>R$15 é o que separa você de ter controle total sobre o seu dinheiro. Para sempre.</p>
+          <CheckoutButton label="Liberar acesso agora →" />
+        </div>
+      </section>
+
+      <div className="section-divider" />
+
+      {/* ══════════════════════════════════════════
+          GARANTIA
+      ═════════════════════════════════════════════ */}
+      <section className="garantia">
+        <div className="container">
+          <div className="garantia-inner">
+            <div className="garantia-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5DCAA5" strokeWidth="1.8">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                <polyline points="9 12 11 14 15 10" />
+              </svg>
+            </div>
+            <div className="garantia-text">
+              <h3>Garantia de 7 dias</h3>
+              <p>Não gostou? Devolvemos 100% do seu dinheiro sem burocracia, sem perguntas. Risco zero do seu lado.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <footer className="footer">
+        <div className="container">Luna Finance · Todos os direitos reservados</div>
+      </footer>
+    </>
+  );
+}

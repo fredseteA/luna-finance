@@ -85,7 +85,7 @@ section { position: relative; z-index: 1; }
 }
 
 .hero h1 {
-  font-size: clamp(32px, 8vw, 42px);
+  font-size: clamp(30px, 8vw, 42px);
   font-weight: 800;
   line-height: 1.15;
   letter-spacing: -0.03em;
@@ -106,6 +106,33 @@ section { position: relative; z-index: 1; }
   line-height: 1.65;
 }
 
+/* ── HERO PHONE ── */
+.hero-phone {
+  position: relative;
+  margin: 32px auto 32px;
+  max-width: 280px;
+}
+
+.hero-phone-glow {
+  position: absolute;
+  inset: -20px;
+  background: radial-gradient(ellipse at center, rgba(29,158,117,0.25) 0%, transparent 70%);
+  pointer-events: none;
+  border-radius: 50%;
+}
+
+.hero-phone-img {
+  width: 100%;
+  border-radius: 24px;
+  border: 1px solid rgba(93,202,165,0.2);
+  box-shadow:
+    0 0 0 1px rgba(93,202,165,0.08),
+    0 24px 64px rgba(0,0,0,0.5),
+    0 4px 16px rgba(29,158,117,0.15);
+  display: block;
+}
+
+/* ── PRICE BADGE ── */
 .price-badge {
   display: inline-block;
   background: rgba(93,202,165,0.08);
@@ -138,6 +165,19 @@ section { position: relative; z-index: 1; }
   letter-spacing: 0.04em;
 }
 
+/* ── CTA BLOCK ── */
+.cta-block {
+  width: 100%;
+}
+
+.error-msg {
+  color: #e55;
+  font-size: 0.85rem;
+  margin-bottom: 0.75rem;
+  text-align: center;
+}
+
+/* ── BUTTONS ── */
 .btn-primary {
   display: block;
   width: 100%;
@@ -166,43 +206,13 @@ section { position: relative; z-index: 1; }
 }
 
 .btn-primary:active { transform: scale(0.98); }
-.btn-primary:hover { background: #1D9E75cc; }
+.btn-primary:hover { background: #18866180; }
 
 .btn-guarantee {
   font-size: 12px;
   color: var(--muted);
   text-align: center;
   margin-top: 12px;
-}
-
-/* ── APP IMAGE PLACEHOLDER ── */
-.app-preview {
-  margin: 40px 0;
-  border-radius: 24px;
-  border: 1px solid var(--border);
-  background: var(--card);
-  overflow: hidden;
-  position: relative;
-}
-
-.app-preview-inner {
-  /* IMAGEM DO APP AQUI */
-  /* Substitua este bloco pelo <img src="screenshot.png"> */
-  min-height: 380px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  gap: 12px;
-  color: var(--muted);
-  font-size: 13px;
-  border: 2px dashed rgba(93,202,165,0.2);
-  margin: 12px;
-  border-radius: 16px;
-}
-
-.app-preview-inner svg {
-  opacity: 0.3;
 }
 
 /* ── DIVIDER ── */
@@ -272,7 +282,135 @@ section { position: relative; z-index: 1; }
   font-weight: 700;
 }
 
-/* ── SOLUÇÃO ── */
+/* ══════════════════════════════════════════
+   FEATURE SHOWCASE — seções com imagens reais
+═══════════════════════════════════════════ */
+.feature-showcase {
+  padding: 56px 0;
+}
+
+.feature-showcase .container {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+/* texto sempre primeiro em mobile */
+.showcase-text {
+  order: 1;
+}
+
+.showcase-phone {
+  order: 2;
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+/* em desktop, versão reverse inverte */
+@media (min-width: 768px) {
+  .feature-showcase .container {
+    flex-direction: row;
+    align-items: center;
+    gap: 48px;
+  }
+
+  .feature-showcase--reverse .container {
+    flex-direction: row-reverse;
+  }
+
+  .showcase-text { order: unset; flex: 1; }
+  .showcase-phone { order: unset; flex: 1; }
+}
+
+.showcase-text .section-label {
+  margin-bottom: 10px;
+}
+
+.showcase-text h2 {
+  font-size: clamp(22px, 6vw, 28px);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: #fff;
+  margin-bottom: 14px;
+}
+
+.showcase-text p {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.65;
+  margin-bottom: 20px;
+}
+
+.showcase-checks {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.showcase-checks li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.showcase-checks li::before {
+  content: '✓';
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(29,158,117,0.2);
+  border: 1px solid rgba(93,202,165,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: var(--accent);
+  font-weight: 700;
+  flex-shrink: 0;
+  line-height: 20px;
+  text-align: center;
+}
+
+/* Phone mockup */
+.showcase-glow {
+  position: absolute;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  pointer-events: none;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  filter: blur(40px);
+  opacity: 0.3;
+}
+
+.showcase-glow--green  { background: #1D9E75; }
+.showcase-glow--blue   { background: #3b82f6; }
+.showcase-glow--purple { background: #8b5cf6; }
+.showcase-glow--teal   { background: #06b6d4; }
+.showcase-glow--orange { background: #f59e0b; }
+
+.showcase-img {
+  width: 100%;
+  max-width: 260px;
+  border-radius: 20px;
+  border: 1px solid rgba(93,202,165,0.15);
+  box-shadow:
+    0 0 0 1px rgba(93,202,165,0.06),
+    0 20px 48px rgba(0,0,0,0.45),
+    0 4px 12px rgba(0,0,0,0.3);
+  display: block;
+  position: relative;
+  z-index: 1;
+}
+
+/* ── SOLUÇÃO (mantido para compatibilidade) ── */
 .solucao {
   padding: 56px 0;
 }
@@ -334,31 +472,6 @@ section { position: relative; z-index: 1; }
   font-size: 13px;
   color: var(--muted);
   line-height: 1.5;
-}
-
-/* ── IMAGE PLACEHOLDERS ── */
-.img-placeholder {
-  /* IMAGEM DO APP AQUI */
-  /* Substitua pelo <img src="..."> correspondente */
-  background: var(--card2);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  min-height: 220px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  gap: 8px;
-  color: var(--muted);
-  font-size: 12px;
-  margin: 24px 0;
-}
-
-.img-placeholder-label {
-  font-size: 11px;
-  color: rgba(122,184,154,0.4);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
 /* ── BENEFÍCIOS ── */
@@ -588,7 +701,6 @@ section { position: relative; z-index: 1; }
 .garantia {
   background: var(--dark2);
   padding: 40px 0;
-  text-align: center;
 }
 
 .garantia-inner {
@@ -641,12 +753,11 @@ section { position: relative; z-index: 1; }
   to { opacity: 1; transform: translateY(0); }
 }
 
-.fade-up {
-  animation: fadeUp 0.6s ease both;
-}
-
+.fade-up { animation: fadeUp 0.6s ease both; }
 .fade-up-1 { animation-delay: 0.1s; }
 .fade-up-2 { animation-delay: 0.2s; }
 .fade-up-3 { animation-delay: 0.3s; }
 .fade-up-4 { animation-delay: 0.4s; }
 
+/* ── RESPONSIVE SAFETY ── */
+img { max-width: 100%; height: auto; }
