@@ -55,7 +55,14 @@ export default function PayWallPage() {
       <a href="#cta" className="btn-primary" onClick={handleCheckout} aria-disabled={loading}>
         {loading ? "Aguarde..." : label || "Liberar acesso agora →"}
       </a>
-      <p className="btn-guarantee">7 dias de garantia · sem perguntas · risco zero</p>
+      <div className="mp-trust">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+        Pagamento 100% seguro via Mercado Pago
+      </div>
+      <p className="btn-guarantee">7 dias de garantia · acesso liberado na hora</p>
     </div>
   );
 
@@ -129,8 +136,50 @@ export default function PayWallPage() {
       <div className="section-divider" />
 
       {/* ══════════════════════════════════════════
-          FUNCIONALIDADES — SHOWCASE DAS TELAS
+          COMO FUNCIONA — fluxo de compra
       ═════════════════════════════════════════════ */}
+      <section className="como-funciona">
+        <div className="container">
+          <p className="section-label" style={{ textAlign: "center" }}>Como funciona</p>
+          <h2 style={{ textAlign: "center", fontSize: 24, marginBottom: 32 }}>
+            Do pagamento ao acesso<br />em menos de 1 minuto.
+          </h2>
+          <div className="fluxo">
+            <div className="fluxo-step">
+              <div className="fluxo-num">1</div>
+              <div className="fluxo-text">
+                <strong>Clique em "Liberar acesso"</strong>
+                <span>Você é direcionado para o checkout seguro do Mercado Pago.</span>
+              </div>
+            </div>
+            <div className="fluxo-line" />
+            <div className="fluxo-step">
+              <div className="fluxo-num">2</div>
+              <div className="fluxo-text">
+                <strong>Pague com cartão ou Pix</strong>
+                <span>R$15 uma única vez. Sem assinar nada, sem dados bancários expostos.</span>
+              </div>
+            </div>
+            <div className="fluxo-line" />
+            <div className="fluxo-step">
+              <div className="fluxo-num fluxo-num--accent">3</div>
+              <div className="fluxo-text">
+                <strong>Acesso liberado na hora ✓</strong>
+                <span>Assim que o pagamento for confirmado, seu acesso vitalício é ativado automaticamente.</span>
+              </div>
+            </div>
+          </div>
+          <div className="mp-badge-large">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5DCAA5" strokeWidth="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              <polyline points="9 12 11 14 15 10"/>
+            </svg>
+            <span>Pagamento processado com segurança pelo <strong>Mercado Pago</strong> — a maior plataforma de pagamentos da América Latina</span>
+          </div>
+        </div>
+      </section>
+
+      <div className="section-divider" />
 
       {/* 1. Controle financeiro — home */}
       <section className="feature-showcase">
@@ -348,6 +397,11 @@ export default function PayWallPage() {
               <div className="preco-comp">menos que qualquer assinatura mensal de app</div>
             </div>
             <CheckoutButton label="Liberar acesso agora →" />
+            <div className="selos">
+              <div className="selo">🔒 Pagamento seguro</div>
+              <div className="selo">⚡ Acesso imediato</div>
+              <div className="selo">↩ 7 dias de garantia</div>
+            </div>
           </div>
         </div>
       </section>
