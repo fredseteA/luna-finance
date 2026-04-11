@@ -42,7 +42,6 @@ export const ExportData = () => {
     currency,
     summary,
     scoreBreakdown,
-    // Novos dados
     transactions,
     currentMonthTransactions,
     paymentSources,

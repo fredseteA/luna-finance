@@ -7,7 +7,7 @@ import React from 'react';
  * Imita: grid de KPIs 2x2, gráfico de pizza, card de formulário com sliders.
  */
 const Pulse = ({ className }) => (
-  <div className={`animate-pulse rounded-lg bg-muted/60 ${className}`} />
+  <div className={`animate-pulse rounded-lg bg-white/10 ${className}`} />
 );
 
 export const InvestimentosSkeleton = () => (
