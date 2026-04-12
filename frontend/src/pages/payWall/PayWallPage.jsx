@@ -74,7 +74,7 @@ export default function PayWallPage() {
       <section className="hero">
         <div className="container">
           <div className="hero-badge fade-up fade-up-1">
-            Acesso vitalício por R$15
+            🔥 Oferta especial — De R$39,99 por R$18,99
           </div>
 
           <h1 className="fade-up fade-up-2">
@@ -95,7 +95,8 @@ export default function PayWallPage() {
           </div>
 
           <div className="price-badge fade-up fade-up-3">
-            <div className="price-main"><span>R$</span>15</div>
+            <div className="price-de">De <s>R$ 39,99</s></div>
+            <div className="price-main"><span>R$</span>18<span className="price-cents">,99</span></div>
             <div className="price-sub">PAGAMENTO ÚNICO · ACESSO VITALÍCIO</div>
           </div>
 
@@ -157,7 +158,7 @@ export default function PayWallPage() {
               <div className="fluxo-num">2</div>
               <div className="fluxo-text">
                 <strong>Pague com cartão ou Pix</strong>
-                <span>R$15 uma única vez. Sem assinar nada, sem dados bancários expostos.</span>
+                <span>R$18,99 uma única vez. Sem assinar nada, sem dados bancários expostos.</span>
               </div>
             </div>
             <div className="fluxo-line" />
@@ -388,12 +389,14 @@ export default function PayWallPage() {
         <div className="container">
           <p className="section-label" style={{ textAlign: "center", marginBottom: 20 }}>Investimento único</p>
           <div className="preco-card">
+            <div className="preco-desconto-badge">52% OFF — Oferta por tempo limitado</div>
             <div className="preco-tag">Acesso vitalício</div>
-            <div className="preco-numero"><sup>R$</sup>15</div>
+            <div className="preco-de-label">De <s>R$ 39,99</s> por apenas</div>
+            <div className="preco-numero"><sup>R$</sup>18<span className="preco-cents">,99</span></div>
             <p className="preco-tipo">PAGAMENTO ÚNICO · SEM MENSALIDADE</p>
             <div className="preco-comparacoes">
               <div className="preco-comp">menos que um lanche no iFood</div>
-              <div className="preco-comp">menos de R$0,05 por dia pelo acesso</div>
+              <div className="preco-comp">menos de R$0,06 por dia pelo acesso</div>
               <div className="preco-comp">menos que qualquer assinatura mensal de app</div>
             </div>
             <CheckoutButton label="Liberar acesso agora →" />
@@ -412,7 +415,7 @@ export default function PayWallPage() {
       <section className="cta-final" id="cta">
         <div className="container">
           <h2>Chega de mês<br />terminando no <em>vermelho.</em></h2>
-          <p>R$15 é o que separa você de ter controle total sobre o seu dinheiro. Para sempre.</p>
+          <p>De R$39,99 por apenas R$18,99 — pagamento único, acesso para sempre.</p>
           <CheckoutButton label="Liberar acesso agora →" />
         </div>
       </section>
