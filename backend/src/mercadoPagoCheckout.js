@@ -25,7 +25,7 @@ async function createPreference({ uid }) {
         title: "Luna Finance — Acesso vitalício",
         quantity: 1,
         currency_id: "BRL",
-        unit_price: 18.99,
+        unit_price: 19.99,
       },
     ],
     external_reference: String(uid),
