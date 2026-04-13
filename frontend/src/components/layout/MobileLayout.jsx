@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -15,7 +15,6 @@ import {
   KeyRound,
   Trash2,
   User,
-  Download,
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '../ui/sheet';
@@ -40,8 +39,8 @@ import {
   reauthenticateWithCredential,
 } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
-import { useInstallPrompt } from '../../hooks/useInstallPrompt';
-import { InstallModal } from '../install/InstallModal';
+
+// ── Removido: useInstallPrompt, InstallModal (agora vivem na Home via InstallBanner)
 
 const mainNavItems = [
   { path: '/', label: 'Home', icon: LayoutDashboard },
@@ -63,17 +62,6 @@ export const MobileLayout = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const { theme, toggleTheme, currency, resetAll } = useFinancial();
   const { user, logout } = useAuth();
-
-  // ── Install prompt ──────────────────────────────────────────────────────────
-  const { canInstall, isInstalled, platform, triggerInstall, markAsInstalled } = useInstallPrompt();
-  const [showInstallModal, setShowInstallModal] = useState(false);
-
-  useEffect(() => {
-    if (user && canInstall && !isInstalled) {
-      const t = setTimeout(() => setShowInstallModal(true), 1500);
-      return () => clearTimeout(t);
-    }
-  }, [user, canInstall, isInstalled]);
 
   // ── Trocar senha ────────────────────────────────────────────────────────────
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -274,19 +262,6 @@ export const MobileLayout = () => {
 
                   {/* Footer */}
                   <div className="p-4 border-t border-border/40 space-y-2">
-
-                    {/* Botão instalar app — aparece se não instalado */}
-                    {canInstall && !isInstalled && (
-                      <Button
-                        variant="outline"
-                        className="w-full justify-start"
-                        onClick={() => { setShowInstallModal(true); setMenuOpen(false); }}
-                      >
-                        <Download className="h-4 w-4 mr-2" />
-                        Instalar app
-                      </Button>
-                    )}
-
                     <Button
                       variant="outline"
                       className="w-full justify-start"
@@ -349,16 +324,6 @@ export const MobileLayout = () => {
           </div>
         </div>
       </nav>
-
-      {/* Modal: Instalar App */}
-      {showInstallModal && (
-        <InstallModal
-          platform={platform}
-          triggerInstall={triggerInstall}
-          markAsInstalled={markAsInstalled}
-          onClose={() => setShowInstallModal(false)}
-        />
-      )}
 
       {/* Modal: Trocar Senha */}
       <AlertDialog open={showChangePassword} onOpenChange={setShowChangePassword}>

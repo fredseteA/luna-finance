@@ -59,6 +59,29 @@ export const storageService = {
     return snap.exists() ? (snap.data().list || []) : [];
   },
 
+  // ─── Install Status ───────────────────────────────────────────────────────
+  // Armazenado em users/{uid}/data/installStatus
+  // { isInstalled: bool, installDismissed: bool }
+
+  getInstallStatus: async (uid) => {
+    if (!uid) return { isInstalled: false, installDismissed: false };
+    const snap = await getDoc(userDoc(uid, 'installStatus'));
+    if (snap.exists()) {
+      const data = snap.data();
+      return {
+        isInstalled:      data.isInstalled      ?? false,
+        installDismissed: data.installDismissed ?? false,
+      };
+    }
+    // Documento ainda não existe — padrão: mostrar banner
+    return { isInstalled: false, installDismissed: false };
+  },
+
+  saveInstallStatus: async (uid, { isInstalled, installDismissed }) => {
+    if (!uid) return;
+    await setDoc(userDoc(uid, 'installStatus'), { isInstalled, installDismissed });
+  },
+
   // ─── Transactions (lançamentos pontuais do dia a dia) ─────────────────────
   // Separados dos variableExpenses — que são gastos recorrentes planejados.
   // Cada transaction: { id, description, amount, category, date, sourceId, createdAt }
@@ -125,7 +148,8 @@ export const storageService = {
     const docs = [
       'settings', 'financialData', 'scenarios',
       'lifeObjectives', 'dismissedAlerts', 'transactions',
-      'paymentSources',                    // ← incluído no reset
+      'paymentSources',
+      'installStatus',   // ← incluído no reset
     ];
     const batch = writeBatch(db);
     docs.forEach(name => batch.delete(userDoc(uid, name)));

@@ -15,6 +15,8 @@ import { usePageVariants } from '../lib/animationVariants';
 import { DashboardEmpty } from '../components/dashboard/DashboardEmpty';
 import { Card, CardContent } from '../components/ui/card';
 import { AllTransactionsModal } from '@/components/modal/AllTransactionsModal';
+import { useInstallStatus } from '@/hooks/useInstallStatus';
+import { InstallBanner } from '@/components/install/installBanner';
 
 // ─── Categorias de gasto ──────────────────────────────────────────────────────
 
@@ -505,7 +507,7 @@ export const HomePage = () => {
   const { container, item } = usePageVariants();
   const { greeting, subtitle } = useGreeting(user?.displayName);
   const [showModal, setShowModal] = useState(false);
-
+  const { showInstallBanner, platform, markInstalled, dismissInstall } = useInstallStatus();
   const hasData    = financialData.monthlyIncome > 0;
   const hasSources = paymentSources.length > 0;
 
@@ -517,6 +519,7 @@ export const HomePage = () => {
     () => currentMonthTransactions.slice(0, 5),
     [currentMonthTransactions],
   );
+  
 
   // Fontes que têm gasto no mês atual OU têm limite configurado
   // — exibimos termômetro individual só para elas
@@ -540,6 +543,14 @@ export const HomePage = () => {
         animate="visible"
         className="space-y-4 pb-4"
       >
+        {/* Banner de instalação — aparece só quando necessário */}
+        {showInstallBanner && (
+          <InstallBanner
+            platform={platform}
+            markInstalled={markInstalled}
+            dismissInstall={dismissInstall}
+          />
+        )}
 
         {/* ── Saudação + chip de alertas ───────────────────────────────── */}
         <motion.div variants={item} className="pt-2">
