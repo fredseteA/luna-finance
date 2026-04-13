@@ -1,13 +1,13 @@
 import "./paywall.css";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import AuthModal from "../../components/auth/AuthModal";
 
-import homeImg      from "@/assets/home.png";
-import investirImg  from "@/assets/investir.png";
+import homeImg       from "@/assets/home.png";
+import investirImg   from "@/assets/investir.png";
 import simulacoesImg from "@/assets/simulacoes.png";
-import analisesImg  from "@/assets/analises.png";
-import relatorioImg from "@/assets/relatorio.png";
+import analisesImg   from "@/assets/analises.png";
+import relatorioImg  from "@/assets/relatorio.png";
 
 const BACKEND_URL =
   process.env.REACT_APP_BACKEND_URL ||
@@ -15,24 +15,22 @@ const BACKEND_URL =
   "http://localhost:4000";
 
 export default function PayWallPage() {
-  const navigate = useNavigate();
   const { user } = useAuth();
+  const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  async function handleCheckout(e) {
-    e.preventDefault();
-    if (!user) {
-      navigate("/login");
-      return;
-    }
+  async function startCheckout() {
+    const currentUser = user ?? (await waitForUser());
+    if (!currentUser) return;
+
     setLoading(true);
     setError(null);
     try {
       const resp = await fetch(`${BACKEND_URL}/checkout/mercadopago/preference`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uid: user.uid }),
+        body: JSON.stringify({ uid: currentUser.uid }),
       });
       if (!resp.ok) throw new Error("Não foi possível iniciar o pagamento. Tente novamente.");
       const data = await resp.json();
@@ -44,15 +42,43 @@ export default function PayWallPage() {
       window.location.href = checkoutUrl;
     } catch (err) {
       setError(err.message || "Erro inesperado. Tente novamente.");
-    } finally {
       setLoading(false);
     }
+  }
+
+  async function waitForUser() {
+    const { auth } = await import("../../lib/firebase");
+    for (let i = 0; i < 15; i++) {
+      if (auth.currentUser) return auth.currentUser;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    return null;
+  }
+
+  function handleCTAClick(e) {
+    e.preventDefault();
+    if (user) {
+      startCheckout();
+    } else {
+      setShowModal(true);
+    }
+  }
+
+  function handleAuthSuccess() {
+    setShowModal(false);
+    startCheckout();
   }
 
   const CheckoutButton = ({ label }) => (
     <div className="cta-block">
       {error && <p className="error-msg">{error}</p>}
-      <a href="#cta" className="btn-primary" onClick={handleCheckout} aria-disabled={loading}>
+      <a
+        href="#cta"
+        className="btn-primary"
+        onClick={handleCTAClick}
+        aria-disabled={loading}
+        style={{ opacity: loading ? 0.7 : 1, pointerEvents: loading ? "none" : "auto" }}
+      >
         {loading ? "Aguarde..." : label || "Liberar acesso agora →"}
       </a>
       <div className="mp-trust">
@@ -68,13 +94,21 @@ export default function PayWallPage() {
 
   return (
     <>
+      {/* Auth modal — rendered via React Portal, floats above everything */}
+      {showModal && (
+        <AuthModal
+          onSuccess={handleAuthSuccess}
+          onClose={() => setShowModal(false)}
+        />
+      )}
+
       {/* ══════════════════════════════════════════
           HERO
       ═════════════════════════════════════════════ */}
       <section className="hero">
         <div className="container">
           <div className="hero-badge fade-up fade-up-1">
-            Acesso vitalício por R$15
+            🔥 Oferta especial — De R$39,99 por R$19,99
           </div>
 
           <h1 className="fade-up fade-up-2">
@@ -88,14 +122,14 @@ export default function PayWallPage() {
             em minutos, não em planilhas.
           </p>
 
-          {/* HERO — imagem do home */}
           <div className="hero-phone fade-up fade-up-3">
             <div className="hero-phone-glow" />
             <img src={homeImg} alt="Luna Finance — tela inicial" className="hero-phone-img" />
           </div>
 
           <div className="price-badge fade-up fade-up-3">
-            <div className="price-main"><span>R$</span>15</div>
+            <div className="price-de">De <s>R$ 39,99</s></div>
+            <div className="price-main"><span>R$</span>19<span className="price-cents">,99</span></div>
             <div className="price-sub">PAGAMENTO ÚNICO · ACESSO VITALÍCIO</div>
           </div>
 
@@ -136,7 +170,7 @@ export default function PayWallPage() {
       <div className="section-divider" />
 
       {/* ══════════════════════════════════════════
-          COMO FUNCIONA — fluxo de compra
+          COMO FUNCIONA
       ═════════════════════════════════════════════ */}
       <section className="como-funciona">
         <div className="container">
@@ -149,7 +183,7 @@ export default function PayWallPage() {
               <div className="fluxo-num">1</div>
               <div className="fluxo-text">
                 <strong>Clique em "Liberar acesso"</strong>
-                <span>Você é direcionado para o checkout seguro do Mercado Pago.</span>
+                <span>Criamos sua conta rapidinho — 30 segundos, sem complicação.</span>
               </div>
             </div>
             <div className="fluxo-line" />
@@ -157,7 +191,7 @@ export default function PayWallPage() {
               <div className="fluxo-num">2</div>
               <div className="fluxo-text">
                 <strong>Pague com cartão ou Pix</strong>
-                <span>R$15 uma única vez. Sem assinar nada, sem dados bancários expostos.</span>
+                <span>R$19,99 uma única vez. Sem assinar nada, sem dados bancários expostos.</span>
               </div>
             </div>
             <div className="fluxo-line" />
@@ -181,7 +215,7 @@ export default function PayWallPage() {
 
       <div className="section-divider" />
 
-      {/* 1. Controle financeiro — home */}
+      {/* 1. Controle financeiro */}
       <section className="feature-showcase">
         <div className="container">
           <div className="showcase-text">
@@ -314,36 +348,20 @@ export default function PayWallPage() {
           <p className="section-label" style={{ textAlign: "center" }}>O que você tem acesso</p>
           <h2>Tudo que você precisa.<br />Nada que você não precisa.</h2>
           <div className="benefit-grid">
-            <div className="benefit-item">
-              <span className="b-icon">📊</span>
-              <h4>Dashboard inteligente</h4>
-              <p>Patrimônio, sobra e crescimento numa só tela.</p>
-            </div>
-            <div className="benefit-item">
-              <span className="b-icon">💳</span>
-              <h4>Fontes de pagamento</h4>
-              <p>Separe gastos por cartão, conta ou benefício.</p>
-            </div>
-            <div className="benefit-item">
-              <span className="b-icon">🎯</span>
-              <h4>Metas financeiras</h4>
-              <p>Define objetivos e acompanha o progresso mês a mês.</p>
-            </div>
-            <div className="benefit-item">
-              <span className="b-icon">📈</span>
-              <h4>Projeção de investimentos</h4>
-              <p>CDI, Selic, CDB e FII com IR real calculado.</p>
-            </div>
-            <div className="benefit-item">
-              <span className="b-icon">🔔</span>
-              <h4>Alertas inteligentes</h4>
-              <p>Avisa antes do limite do cartão estourar.</p>
-            </div>
-            <div className="benefit-item">
-              <span className="b-icon">📄</span>
-              <h4>Relatório em PDF</h4>
-              <p>Exporta o mês completo para compartilhar.</p>
-            </div>
+            {[
+              { icon: "📊", title: "Dashboard inteligente", desc: "Patrimônio, sobra e crescimento numa só tela." },
+              { icon: "💳", title: "Fontes de pagamento",   desc: "Separe gastos por cartão, conta ou benefício." },
+              { icon: "🎯", title: "Metas financeiras",     desc: "Define objetivos e acompanha o progresso mês a mês." },
+              { icon: "📈", title: "Projeção de investimentos", desc: "CDI, Selic, CDB e FII com IR real calculado." },
+              { icon: "🔔", title: "Alertas inteligentes",  desc: "Avisa antes do limite do cartão estourar." },
+              { icon: "📄", title: "Relatório em PDF",      desc: "Exporta o mês completo para compartilhar." },
+            ].map((b) => (
+              <div key={b.title} className="benefit-item">
+                <span className="b-icon">{b.icon}</span>
+                <h4>{b.title}</h4>
+                <p>{b.desc}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
@@ -359,22 +377,17 @@ export default function PayWallPage() {
           <h2>Em poucos dias você já sente a diferença.</h2>
           <p>Não é promessa — é o que acontece quando você para de adivinhar e começa a enxergar.</p>
           <div className="resultado-cards">
-            <div className="resultado-card">
-              <div className="resultado-dot" />
-              <p><strong>No primeiro dia:</strong> você vê pela primeira vez para onde vai cada real que entra na sua conta.</p>
-            </div>
-            <div className="resultado-card">
-              <div className="resultado-dot" />
-              <p><strong>Na primeira semana:</strong> você identifica os gastos que somem sem deixar rastro.</p>
-            </div>
-            <div className="resultado-card">
-              <div className="resultado-dot" />
-              <p><strong>No final do mês:</strong> você chega com sobra — e sabe exatamente quanto pode investir.</p>
-            </div>
-            <div className="resultado-card">
-              <div className="resultado-dot" />
-              <p><strong>Em 3 meses:</strong> você começa a ver seu patrimônio crescer de acordo com a projeção.</p>
-            </div>
+            {[
+              { when: "No primeiro dia:", what: "você vê pela primeira vez para onde vai cada real que entra na sua conta." },
+              { when: "Na primeira semana:", what: "você identifica os gastos que somem sem deixar rastro." },
+              { when: "No final do mês:", what: "você chega com sobra — e sabe exatamente quanto pode investir." },
+              { when: "Em 3 meses:", what: "você começa a ver seu patrimônio crescer de acordo com a projeção." },
+            ].map((r) => (
+              <div key={r.when} className="resultado-card">
+                <div className="resultado-dot" />
+                <p><strong>{r.when}</strong> {r.what}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
@@ -388,12 +401,14 @@ export default function PayWallPage() {
         <div className="container">
           <p className="section-label" style={{ textAlign: "center", marginBottom: 20 }}>Investimento único</p>
           <div className="preco-card">
+            <div className="preco-desconto-badge">52% OFF — Oferta por tempo limitado</div>
             <div className="preco-tag">Acesso vitalício</div>
-            <div className="preco-numero"><sup>R$</sup>15</div>
+            <div className="preco-de-label">De <s>R$ 39,99</s> por apenas</div>
+            <div className="preco-numero"><sup>R$</sup>19<span className="preco-cents">,99</span></div>
             <p className="preco-tipo">PAGAMENTO ÚNICO · SEM MENSALIDADE</p>
             <div className="preco-comparacoes">
               <div className="preco-comp">menos que um lanche no iFood</div>
-              <div className="preco-comp">menos de R$0,05 por dia pelo acesso</div>
+              <div className="preco-comp">menos de R$0,06 por dia pelo acesso</div>
               <div className="preco-comp">menos que qualquer assinatura mensal de app</div>
             </div>
             <CheckoutButton label="Liberar acesso agora →" />
@@ -412,7 +427,7 @@ export default function PayWallPage() {
       <section className="cta-final" id="cta">
         <div className="container">
           <h2>Chega de mês<br />terminando no <em>vermelho.</em></h2>
-          <p>R$15 é o que separa você de ter controle total sobre o seu dinheiro. Para sempre.</p>
+          <p>De R$39,99 por apenas R$19,99 — pagamento único, acesso para sempre.</p>
           <CheckoutButton label="Liberar acesso agora →" />
         </div>
       </section>
