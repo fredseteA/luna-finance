@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Settings, Percent, DollarSign, Palette, RotateCcw } from 'lucide-react';
+import { Settings, Percent, DollarSign, Palette, RotateCcw, Banknote, TrendingDown } from 'lucide-react';
 import { RealisticSettings } from '../components/settings/RealisticSettings';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -47,7 +47,10 @@ export const ConfiguracoesPage = () => {
     setCurrency, 
     theme, 
     toggleTheme,
-    resetAll 
+    resetAll,
+    financialData,           
+    updateFinancialData,     
+    formatCurrency, 
   } = useFinancial();
 
   if (!mounted) {
@@ -180,6 +183,137 @@ export const ConfiguracoesPage = () => {
                 </AlertDialogContent>
               </AlertDialog>
             </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* Income Settings */}
+      <motion.div variants={itemVariants}>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Banknote className="h-4 w-4 text-emerald-400" />
+              Renda e Patrimônio
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Base para o planejamento e projeções
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+
+            {/* Renda mensal */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Renda Mensal Líquida
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-mono text-muted-foreground">
+                  R$
+                </span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="0,00"
+                  value={financialData.monthlyIncome > 0 ? financialData.monthlyIncome : ''}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value.replace(',', '.').replace(/[^\d.]/g, ''));
+                    updateFinancialData({ monthlyIncome: isNaN(val) ? 0 : val });
+                  }}
+                  className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-muted border border-border text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Valor líquido que você recebe por mês (já descontado impostos)
+              </p>
+            </div>
+
+            <Separator />
+
+            {/* Patrimônio inicial */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Patrimônio Atual
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-mono text-muted-foreground">
+                  R$
+                </span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="0,00"
+                  value={financialData.initialPatrimony > 0 ? financialData.initialPatrimony : ''}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value.replace(',', '.').replace(/[^\d.]/g, ''));
+                    updateFinancialData({ initialPatrimony: isNaN(val) ? 0 : val });
+                  }}
+                  className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-muted border border-border text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Total que você já tem investido ou guardado hoje
+              </p>
+            </div>
+
+            <Separator />
+
+            {/* Duração da projeção */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Horizonte de Projeção
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  placeholder="12"
+                  min={1}
+                  max={600}
+                  value={financialData.durationMonths || ''}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value);
+                    updateFinancialData({ durationMonths: isNaN(val) ? 12 : Math.max(1, val) });
+                  }}
+                  className="w-full pr-16 pl-3 py-2.5 rounded-xl bg-muted border border-border text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                  meses
+                </span>
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Por quantos meses projetar a evolução do patrimônio
+              </p>
+            </div>
+
+            {/* Preview rápido */}
+            {financialData.monthlyIncome > 0 && (
+              <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/15">
+                <p className="text-[10px] font-semibold text-emerald-400 mb-1.5">Resumo configurado</p>
+                <div className="space-y-1">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Renda mensal</span>
+                    <span className="font-mono font-semibold text-emerald-400">
+                      {formatCurrency(financialData.monthlyIncome)}
+                    </span>
+                  </div>
+                  {financialData.initialPatrimony > 0 && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Patrimônio atual</span>
+                      <span className="font-mono font-semibold">
+                        {formatCurrency(financialData.initialPatrimony)}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Projeção</span>
+                    <span className="font-mono font-semibold">
+                      {financialData.durationMonths || 12} meses
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
           </CardContent>
         </Card>
       </motion.div>
