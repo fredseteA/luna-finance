@@ -1,6 +1,8 @@
 import React from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { useEffect } from "react";
+import ReactPixel from "react-facebook-pixel";
 import { AuthProvider } from './contexts/AuthContext';
 import { useAuth } from "./contexts/AuthContext";
 import { FinancialProvider } from "./contexts/FinancialContext";
@@ -20,6 +22,14 @@ import { CenariosPage } from "./pages/CenariosPage";
 import { ConfiguracoesPage } from "./pages/ConfiguracoesPage";
 import { Toaster } from "./components/ui/sonner";
 
+function PixelTracker() {
+  const location = useLocation();
+  useEffect(() => {
+    ReactPixel.pageView();
+  }, [location.pathname]);
+  return null;
+}
+
 function PaywallEntry() {
   const { user, isPremium, loading } = useAuth();
   if (loading)
@@ -36,6 +46,7 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <PixelTracker /> 
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/paywall" element={<PaywallEntry />} />

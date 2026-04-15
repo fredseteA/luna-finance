@@ -2,6 +2,7 @@ import "./paywall.css";
 import { useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import AuthModal from "../../components/auth/AuthModal";
+import { pixelInitiateCheckout } from '@/lib/metaPixel';
 
 import homeImg       from "@/assets/home.png";
 import investirImg   from "@/assets/investir.png";
@@ -57,6 +58,7 @@ export default function PayWallPage() {
 
   function handleCTAClick(e) {
     e.preventDefault();
+    pixelInitiateCheckout(); 
     if (user) {
       startCheckout();
     } else {
@@ -65,6 +67,7 @@ export default function PayWallPage() {
   }
 
   function handleAuthSuccess() {
+    pixelLead(); 
     setShowModal(false);
     startCheckout();
   }
