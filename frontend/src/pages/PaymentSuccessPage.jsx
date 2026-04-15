@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth } from "../lib/firebase";
+import { pixelPurchase } from '@/lib/metaPixel';
 
 /**
  * PaymentSuccessPage
@@ -29,6 +30,7 @@ export default function PaymentSuccessPage() {
       const { claims } = await user.getIdTokenResult();
 
       if (claims?.isPremium) {
+        pixelPurchase(18.99);
         setStatus("success");
         setTimeout(() => navigate("/"), 2000);
         return true;
