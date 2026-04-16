@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import AuthModal from "../../components/auth/AuthModal";
 import { pixelInitiateCheckout } from '@/lib/metaPixel';
+import videoDemoSrc from "@/assets/videoDemo.mp4";
 
 import avatar1Img from "@/assets/avatar1.png";
 import avatar2Img from "@/assets/avatar2.png";
@@ -239,6 +240,52 @@ export default function PayWallPage() {
       </section>
 
       <div className="section-divider" />
+      
+      {/* ══════════════════════════════════════════
+          VÍDEO DEMO
+      ═════════════════════════════════════════════ */}
+      <section className="video-demo">
+        <div className="container">
+          <p className="video-demo__label">Veja ao vivo</p>
+          <h2 className="video-demo__title">
+            Do zero ao controle<br />em menos de 2 minutos.
+          </h2>
+          <p className="video-demo__sub">
+            Veja como é simples registrar gastos,<br />acompanhar investimentos e entender seu dinheiro.
+          </p>
+      
+          <div className="video-demo__phone">
+            <div className="video-demo__glow" />
+      
+            {/* Badge flutuante esquerda */}
+            <div className="video-demo__badges">
+              <div className="video-demo__badge video-demo__badge--left">
+                <div className="video-demo__badge-dot" />
+                Gastos em tempo real
+              </div>
+              <div className="video-demo__badge video-demo__badge--right">
+                <div className="video-demo__badge-dot" />
+                Análise automática
+              </div>
+            </div>
+      
+            <div className="video-demo__frame">
+              <div className="video-demo__notch" />
+              <video
+                className="video-demo__video"
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="none"
+              >
+                <source src={videoDemoSrc} type="video/mp4" />
+              </video>
+            </div>
+          </div>
+        </div>
+      </section>
+      
 
       {/* ══════════════════════════════════════════
           PROBLEMA
