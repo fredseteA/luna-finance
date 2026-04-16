@@ -56,7 +56,7 @@ function ConvictionStep({ onContinue, onClose }) {
 
       {/* Price highlight */}
       <div style={styles.priceBox}>
-        <span style={styles.priceFrom}>De <s>R$ 39,99</s> por apenas</span>
+        <span style={styles.priceFrom}>De <s>R$ 119,99</s> por apenas</span>
         <div style={styles.priceMain}>
           <sup style={styles.priceSup}>R$</sup>
           <span style={styles.priceNum}>19</span>
