@@ -15,6 +15,7 @@ import {
   KeyRound,
   Trash2,
   User,
+  MessageCircle,
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '../ui/sheet';
@@ -40,7 +41,8 @@ import {
 } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
 
-// ── Removido: useInstallPrompt, InstallModal (agora vivem na Home via InstallBanner)
+const SUPPORT_PHONE = "5522992080811";
+const SUPPORT_MESSAGE = "Olá! Preciso de suporte com o Luna Finance.";
 
 const mainNavItems = [
   { path: '/', label: 'Home', icon: LayoutDashboard },
@@ -81,6 +83,13 @@ export const MobileLayout = () => {
     setMenuOpen(false);
     await logout();
     navigate('/login');
+  };
+
+  const handleSupport = () => {
+    window.open(
+      `https://wa.me/${SUPPORT_PHONE}?text=${encodeURIComponent(SUPPORT_MESSAGE)}`,
+      '_blank'
+    );
   };
 
   const handleChangePassword = async () => {
@@ -255,6 +264,28 @@ export const MobileLayout = () => {
                         <p className="text-xs text-muted-foreground text-muted-foreground">
                           Remove todos os dados
                         </p>
+                      </div>
+                      <ChevronRight className="h-4 w-4 opacity-50" />
+                    </button>
+
+                    {/* Divider suporte */}
+                    <div className="my-2 px-3">
+                      <p className="text-[10px] font-semibold uppercase text-muted-foreground tracking-wider">
+                        Ajuda
+                      </p>
+                    </div>
+
+                    {/* Suporte WhatsApp */}
+                    <button
+                      onClick={() => { handleSupport(); setMenuOpen(false); }}
+                      className="flex items-center gap-3 p-3 rounded-lg mb-1 w-full hover:bg-emerald-500/10 transition-colors text-emerald-500"
+                    >
+                      <div className="p-2 rounded-lg bg-emerald-500/10">
+                        <MessageCircle className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <p className="font-medium text-sm">Suporte</p>
+                        <p className="text-xs text-muted-foreground">Falar via WhatsApp</p>
                       </div>
                       <ChevronRight className="h-4 w-4 opacity-50" />
                     </button>

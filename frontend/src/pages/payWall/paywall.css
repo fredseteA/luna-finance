@@ -168,6 +168,9 @@ section { position: relative; z-index: 1; }
 /* ── CTA BLOCK ── */
 .cta-block {
   width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .error-msg {
@@ -175,6 +178,7 @@ section { position: relative; z-index: 1; }
   font-size: 0.85rem;
   margin-bottom: 0.75rem;
   text-align: center;
+  width: 100%;
 }
 
 /* ── BUTTONS ── */
@@ -206,13 +210,74 @@ section { position: relative; z-index: 1; }
 }
 
 .btn-primary:active { transform: scale(0.98); }
-.btn-primary:hover { background: #18866180; }
+.btn-primary:hover { background: #188661; }
 
 .btn-guarantee {
   font-size: 12px;
   color: var(--muted);
   text-align: center;
   margin-top: 12px;
+}
+
+/* ── MP TRUST (dentro do CheckoutButton) ── */
+.mp-trust {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 10px;
+  margin-bottom: 4px;
+  width: 100%;
+}
+
+/* ── BOTÃO DE SUPORTE ── */
+.btn-support {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 13px;
+  opacity: 0.85;
+  margin-top: 12px;
+  padding: 0;
+  font-family: 'DM Sans', sans-serif;
+  transition: opacity 0.15s;
+}
+
+.btn-support:hover {
+  opacity: 1;
+}
+
+/* ── SELOS ── */
+.selos {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 20px;
+  width: 100%;
+}
+
+.selo {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(93,202,165,0.08);
+  border: 1px solid rgba(93,202,165,0.18);
+  border-radius: 100px;
+  padding: 6px 14px;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 500;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
 }
 
 /* ── DIVIDER ── */
@@ -283,7 +348,7 @@ section { position: relative; z-index: 1; }
 }
 
 /* ══════════════════════════════════════════
-   FEATURE SHOWCASE — seções com imagens reais
+   FEATURE SHOWCASE
 ═══════════════════════════════════════════ */
 .feature-showcase {
   padding: 56px 0;
@@ -295,7 +360,6 @@ section { position: relative; z-index: 1; }
   gap: 32px;
 }
 
-/* texto sempre primeiro em mobile */
 .showcase-text {
   order: 1;
 }
@@ -307,7 +371,6 @@ section { position: relative; z-index: 1; }
   justify-content: center;
 }
 
-/* em desktop, versão reverse inverte */
 @media (min-width: 768px) {
   .feature-showcase .container {
     flex-direction: row;
@@ -376,7 +439,6 @@ section { position: relative; z-index: 1; }
   text-align: center;
 }
 
-/* Phone mockup */
 .showcase-glow {
   position: absolute;
   width: 200px;
@@ -410,7 +472,7 @@ section { position: relative; z-index: 1; }
   z-index: 1;
 }
 
-/* ── SOLUÇÃO (mantido para compatibilidade) ── */
+/* ── SOLUÇÃO ── */
 .solucao {
   padding: 56px 0;
 }
@@ -747,6 +809,24 @@ section { position: relative; z-index: 1; }
   color: rgba(122,184,154,0.35);
 }
 
+.footer-support-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 12px;
+  opacity: 0.7;
+  font-family: 'DM Sans', sans-serif;
+  transition: opacity 0.15s;
+}
+
+.footer-support-btn:hover {
+  opacity: 1;
+}
+
 /* ── ANIMATIONS ── */
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(24px); }
@@ -843,37 +923,6 @@ section { position: relative; z-index: 1; }
 .mp-badge-large svg { flex-shrink: 0; margin-top: 2px; }
 .mp-badge-large strong { color: var(--accent); }
 
-/* ── MP TRUST (dentro do CheckoutButton) ── */
-.mp-trust {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--muted);
-  margin-top: 10px;
-  margin-bottom: 4px;
-}
-
-/* ── SELOS ── */
-.selos {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-  flex-wrap: wrap;
-  margin-top: 16px;
-}
-
-.selo {
-  background: rgba(93,202,165,0.07);
-  border: 1px solid rgba(93,202,165,0.15);
-  border-radius: 100px;
-  padding: 5px 12px;
-  font-size: 11px;
-  color: var(--muted);
-  font-weight: 500;
-}
-
 /* ── RESPONSIVE SAFETY ── */
 img { max-width: 100%; height: auto; }
 
@@ -926,16 +975,12 @@ img { max-width: 100%; height: auto; }
   letter-spacing: -0.02em;
 }
 
-/* ══════════════════════════════════════════
-   MODAL ANIMATIONS
-   Adicione ao final do paywall.css
-═══════════════════════════════════════════ */
- 
+/* ── MODAL ANIMATIONS ── */
 @keyframes fadeIn {
   from { opacity: 0; }
   to   { opacity: 1; }
 }
- 
+
 @keyframes slideUp {
   from { transform: translateY(100%); opacity: 0; }
   to   { transform: translateY(0);    opacity: 1; }
