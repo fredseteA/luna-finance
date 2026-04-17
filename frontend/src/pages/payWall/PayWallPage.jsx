@@ -74,11 +74,12 @@ export default function PayWallPage() {
   const [openFaq, setOpenFaq]       = useState(null);
   const [showSticky, setShowSticky] = useState(false);
 
-  // Mostra sticky CTA após rolar 400px
   useEffect(() => {
-    const onScroll = () => setShowSticky(window.scrollY > 400);
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    const script = document.createElement("script");
+    script.src = "https://sdk.mercadopago.com/js/v2";
+    script.async = true;
+    document.body.appendChild(script);
+    return () => document.body.removeChild(script);
   }, []);
 
   async function startCheckout() {
@@ -94,12 +95,20 @@ export default function PayWallPage() {
       });
       if (!resp.ok) throw new Error("Não foi possível iniciar o pagamento. Tente novamente.");
       const data = await resp.json();
-      const checkoutUrl =
-        process.env.NODE_ENV === "production" ? data.init_point : data.sandbox_init_point;
-      if (!checkoutUrl) throw new Error("URL de checkout não encontrada.");
-      window.location.href = checkoutUrl;
+      if (!data.id) throw new Error("Preferência de pagamento não encontrada.");
+
+      const mp = new window.MercadoPago(process.env.REACT_APP_MP_PUBLIC_KEY, {
+        locale: "pt-BR",
+      });
+
+      mp.checkout({
+        preference: { id: data.id },
+        autoOpen: true,
+      });
+
     } catch (err) {
       setError(err.message || "Erro inesperado. Tente novamente.");
+    } finally {
       setLoading(false);
     }
   }
