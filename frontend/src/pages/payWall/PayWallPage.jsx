@@ -1,5 +1,5 @@
 import "./paywall.css";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import AuthModal from "../../components/auth/AuthModal";
 import { pixelInitiateCheckout } from '@/lib/metaPixel';
@@ -23,56 +23,101 @@ const BACKEND_URL =
 const SUPPORT_PHONE = "5522992080811";
 const SUPPORT_MESSAGE = "Olá! Preciso de suporte com o Luna Finance.";
 
+// ── DEPOIMENTOS ────────────────────────────────────────────────────────────
+// COPY: Depoimentos curtos, coloquiais, com dor real → resultado real.
 const DEPOIMENTOS = [
   {
     nome: "Mariana S.",
     cidade: "São Paulo, SP",
-    texto: "comecei a usar sem acreditar muito não, achei que ia ser igual aos outros app que nunca usei de verdade. mas na primeira semana já vi que tava gastando quase R$300 por mês em delivery sem perceber. agora pelo menos eu sei pra onde tá indo",
+    texto: "Na primeira semana já vi que gastava R$300 por mês em delivery sem perceber. Agora eu sei pra onde vai cada real.",
     estrelas: 5,
     foto: avatar1Img,
   },
   {
     nome: "Rafael C.",
     cidade: "Curitiba, PR",
-    texto: "po esse app é mão na roda demais. tentei planilha, tentei outro app, nada durava. esse aqui abro todo dia porque é simples, não tem aquela enrolação. o que eu precisava tá na tela, sem ficar procurando",
+    texto: "Tentei planilha, tentei outro app — nada durava. Esse aqui abro todo dia porque é simples. O que eu precisava tá na tela.",
     estrelas: 5,
     foto: avatar2Img,
   },
   {
     nome: "Juliana T.",
     cidade: "Belo Horizonte, MG",
-    texto: "o que me convenceu foi o cálculo do IR nos investimentos, nunca tinha visto isso em app nenhum gratuito. aí vi que R$19 era menos que o lanche que peço toda sexta, falei 'vou arriscar'. valeu a pena",
+    texto: "Vi que R$19 era menos que o lanche que peço toda sexta. Falei 'vou arriscar'. Valeu muito a pena.",
     estrelas: 5,
     foto: avatar3Img,
   },
 ];
-// ── FAQ anti-objeção ──────────────────────────────────────────────────────
+
+// ── FAQ ─────────────────────────────────────────────────────────────────────
+// COPY: Foco nas 3 objeções reais de quem hesita na compra.
 const FAQ_ITEMS = [
   {
-    q: "É realmente pagamento único? Sem mensalidade?",
-    a: "Sim. Você paga R$19,99 uma vez e o acesso é seu para sempre — mesmo que você troque de celular ou reinstale o app. Sem cobrança recorrente, sem surpresa no cartão.",
+    q: "Por que só R$19,99? Tem mensalidade escondida?",
+    a: "Não. É pagamento único mesmo — você paga uma vez e o acesso é seu para sempre. Não cobramos nada depois. O preço é baixo porque queremos que o app chegue pra quem mais precisa, não só pra quem pode pagar caro.",
   },
   {
-    q: "Como funciona a garantia de 7 dias?",
-    a: "Se por qualquer motivo você não gostar, basta mandar uma mensagem no WhatsApp em até 7 dias após a compra. Devolvemos 100% do valor sem burocracia e sem perguntas.",
+    q: "E se eu não gostar?",
+    a: "Você tem 7 dias de garantia total. Manda uma mensagem no WhatsApp e a gente devolve 100% do valor, sem burocracia e sem perguntas.",
   },
   {
     q: "Preciso conectar minha conta bancária?",
-    a: "Não. O Luna Finance não acessa sua conta bancária em nenhum momento. Você registra os lançamentos manualmente, o que dá muito mais consciência sobre seus gastos.",
+    a: "Não. O app não acessa sua conta em nenhum momento. Você registra os gastos manualmente — e isso é justamente o que faz você prestar atenção no dinheiro.",
   },
   {
-    q: "Funciona para quem tem pouco dinheiro para investir?",
-    a: "Sim — na verdade é exatamente para isso. O app mostra quanto você pode separar para investir e simula o crescimento mesmo com aportes pequenos, como R$50 ou R$100 por mês.",
+    q: "Funciona mesmo que eu ganhe pouco?",
+    a: "Sim — na verdade é para isso que ele foi feito. Quanto menos sobra, mais importa saber pra onde vai. O app funciona com qualquer renda.",
   },
 ];
 
+// ── CONTADOR DE OFERTA ───────────────────────────────────────────────────────
+// Gera um tempo fixo por sessão (4h a partir do acesso).
+// Salvo em sessionStorage pra não resetar no reload.
+function getOfferExpiry() {
+  const key = "luna_offer_expiry";
+  let expiry = sessionStorage.getItem(key);
+  if (!expiry) {
+    expiry = Date.now() + 4 * 60 * 60 * 1000; // 4 horas
+    sessionStorage.setItem(key, expiry);
+  }
+  return parseInt(expiry, 10);
+}
+
+function useCountdown() {
+  const [timeLeft, setTimeLeft] = useState(0);
+  const expiryRef = useRef(getOfferExpiry());
+
+  useEffect(() => {
+    function tick() {
+      const diff = Math.max(0, expiryRef.current - Date.now());
+      setTimeLeft(diff);
+    }
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const h = Math.floor(timeLeft / 3_600_000);
+  const m = Math.floor((timeLeft % 3_600_000) / 60_000);
+  const s = Math.floor((timeLeft % 60_000) / 1_000);
+  const expired = timeLeft === 0;
+
+  return {
+    display: `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`,
+    expired,
+  };
+}
+
+// ── CHECKOUT BUTTON ───────────────────────────────────────────────────────────
+// Componente reutilizável de CTA.
+
 export default function PayWallPage() {
   const { user } = useAuth();
-  const [showModal, setShowModal]   = useState(false);
-  const [loading, setLoading]       = useState(false);
-  const [error, setError]           = useState(null);
-  const [openFaq, setOpenFaq]       = useState(null);
-  const [showSticky, setShowSticky] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [loading, setLoading]     = useState(false);
+  const [error, setError]         = useState(null);
+  const [openFaq, setOpenFaq]     = useState(null);
+  const { display: countdown, expired } = useCountdown();
 
   useEffect(() => {
     const script = document.createElement("script");
@@ -96,16 +141,8 @@ export default function PayWallPage() {
       if (!resp.ok) throw new Error("Não foi possível iniciar o pagamento. Tente novamente.");
       const data = await resp.json();
       if (!data.id) throw new Error("Preferência de pagamento não encontrada.");
-
-      const mp = new window.MercadoPago(process.env.REACT_APP_MP_PUBLIC_KEY, {
-        locale: "pt-BR",
-      });
-
-      mp.checkout({
-        preference: { id: data.id },
-        autoOpen: true,
-      });
-
+      const mp = new window.MercadoPago(process.env.REACT_APP_MP_PUBLIC_KEY, { locale: "pt-BR" });
+      mp.checkout({ preference: { id: data.id }, autoOpen: true });
     } catch (err) {
       setError(err.message || "Erro inesperado. Tente novamente.");
     } finally {
@@ -141,8 +178,7 @@ export default function PayWallPage() {
     );
   }
 
-  // ── Botão de checkout reutilizável ─────────────────────────────────────
-  const CheckoutButton = ({ label, showSelos = false, compact = false }) => (
+  const CheckoutButton = ({ label, compact = false }) => (
     <div className="cta-block">
       {error && <p className="error-msg">{error}</p>}
       <a
@@ -158,17 +194,20 @@ export default function PayWallPage() {
             Aguarde...
           </span>
         ) : (
-          label || "Liberar acesso agora →"
+          label || "Quero meu acesso agora →"
         )}
       </a>
 
       <div className="trust-row">
         <span className="trust-item">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-          100% seguro · Mercado Pago
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <rect x="3" y="11" width="18" height="11" rx="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+          Mercado Pago · 100% seguro
         </span>
         <span className="trust-dot">·</span>
-        <span className="trust-item">↩ 7 dias de garantia</span>
+        <span className="trust-item">🛡️ 7 dias de garantia</span>
         <span className="trust-dot">·</span>
         <span className="trust-item">⚡ Acesso imediato</span>
       </div>
@@ -177,7 +216,7 @@ export default function PayWallPage() {
         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
           <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
         </svg>
-        Dúvidas? Fale com o suporte
+        Dúvida? Fale com o suporte antes de comprar
       </button>
     </div>
   );
@@ -188,8 +227,10 @@ export default function PayWallPage() {
         <AuthModal onSuccess={handleAuthSuccess} onClose={() => setShowModal(false)} />
       )}
 
-      {/* ── STICKY CTA (mobile) ────────────────────────────────────────── */}
-      <div className={`sticky-cta${showSticky ? " sticky-cta--visible" : ""}`}>
+      {/* ══════════════════════════════════════════
+          STICKY CTA (mobile)
+      ═════════════════════════════════════════════ */}
+      <div className="sticky-cta sticky-cta--visible">
         <div className="sticky-cta-inner">
           <div className="sticky-cta-price">
             <span className="sticky-de">R$119,99</span>
@@ -209,106 +250,70 @@ export default function PayWallPage() {
 
       {/* ══════════════════════════════════════════
           HERO
+          COPY: Headline = dor imediata + promessa simples.
+          Subheadline = o que o app faz em linguagem humana.
+          Sem termos técnicos, sem jargões.
       ═════════════════════════════════════════════ */}
       <section className="hero">
         <div className="container">
+
+          {/* Prova social no topo — reduz desconfiança antes de qualquer coisa */}
           <div className="hero-badge fade-up fade-up-1">
-            🔥 Oferta especial — De R$119,99 por R$19,99
+            ⭐ +2.400 pessoas já usam · 4,9 de avaliação
           </div>
 
           <h1 className="fade-up fade-up-2">
-            Pare de chegar no<br />
-            fim do mês sem<br />
-            <em>saber o que aconteceu.</em>
+            Você sabe quanto<br />
+            ganhou esse mês.<br />
+            <em>Mas sabe onde foi parar?</em>
           </h1>
 
           <p className="hero-sub fade-up fade-up-3">
-            Luna Finance transforma a bagunça financeira em clareza total —
-            em minutos, não em planilhas.
+            Luna Finance mostra, em segundos, pra onde vai cada real do seu dinheiro —
+            sem planilha, sem banco conectado, sem complicação.
           </p>
 
+          {/* Phone mockup */}
           <div className="hero-phone fade-up fade-up-3">
             <div className="hero-phone-glow" />
             <img src={homeImg} alt="Luna Finance — tela inicial" className="hero-phone-img" />
           </div>
 
-          {/* Social proof rápida acima do preço */}
-          <div className="hero-social-proof fade-up fade-up-3">
-            <div className="star-row">★★★★★</div>
-            <span>+2.400 pessoas já controlam as finanças com o Luna</span>
-          </div>
-
+          {/* Preço + urgência */}
           <div className="price-badge fade-up fade-up-4">
             <div className="price-de">De <s>R$ 119,99</s></div>
             <div className="price-main"><span>R$</span>19<span className="price-cents">,99</span></div>
             <div className="price-sub">PAGAMENTO ÚNICO · ACESSO VITALÍCIO</div>
           </div>
 
-          <CheckoutButton label="Quero controlar meu dinheiro agora →" />
+          {/* Contador de oferta */}
+          {!expired && (
+            <div className="offer-timer fade-up fade-up-4">
+              <span className="offer-timer__label">Oferta promocional expira em</span>
+              <span className="offer-timer__clock">{countdown}</span>
+            </div>
+          )}
+
+          <CheckoutButton label="Quero saber pra onde meu dinheiro vai →" />
         </div>
       </section>
 
       <div className="section-divider" />
-      
-      {/* ══════════════════════════════════════════
-          VÍDEO DEMO
-      ═════════════════════════════════════════════ */}
-      <section className="video-demo">
-        <div className="container">
-          <p className="video-demo__label">Veja ao vivo</p>
-          <h2 className="video-demo__title">
-            Do zero ao controle<br />em menos de 2 minutos.
-          </h2>
-          <p className="video-demo__sub">
-            Veja como é simples registrar gastos,<br />acompanhar investimentos e entender seu dinheiro.
-          </p>
-      
-          <div className="video-demo__phone">
-            <div className="video-demo__glow" />
-      
-            {/* Badge flutuante esquerda */}
-            <div className="video-demo__badges">
-              <div className="video-demo__badge video-demo__badge--left">
-                <div className="video-demo__badge-dot" />
-                Gastos em tempo real
-              </div>
-              <div className="video-demo__badge video-demo__badge--right">
-                <div className="video-demo__badge-dot" />
-                Análise automática
-              </div>
-            </div>
-      
-            <div className="video-demo__frame">
-              <div className="video-demo__notch" />
-              <video
-                className="video-demo__video"
-                autoPlay
-                muted
-                loop
-                playsInline
-                preload="none"
-              >
-                <source src={videoDemoSrc} type="video/mp4" />
-              </video>
-            </div>
-          </div>
-        </div>
-      </section>
-      
 
       {/* ══════════════════════════════════════════
           PROBLEMA
+          COPY: Mais curto. Foco na dor emocional, não na lista técnica.
+          3 itens no máximo — cada um deve doer.
       ═════════════════════════════════════════════ */}
       <section className="problema">
         <div className="container">
           <p className="section-label">Você se reconhece nisso?</p>
-          <h2>Fim do mês chegou.<br />O dinheiro sumiu.</h2>
+          <h2>O dinheiro some.<br />Mas pra onde?</h2>
           <ul className="pain-list">
             {[
-              "Você ganha, paga as contas, e o que sobra some — sem saber para onde foi.",
-              "Você tenta controlar pelo extrato bancário, mas é impossível entender o padrão.",
-              "Já tentou planilha, já tentou app complicado — nada grudou por mais de uma semana.",
-              "Você sente que deveria estar guardando mais, mas não sabe exatamente quanto nem como.",
+              "Você recebe, paga as contas… e o resto desaparece sem explicação.",
+              "Já tentou planilha, já tentou anotar no celular — nunca dura mais de uma semana.",
+              "No fim do mês você fica com a sensação de que deveria ter sobrado mais.",
             ].map((txt, i) => (
               <li key={i} className="pain-item">
                 <div className="pain-icon">✕</div>
@@ -322,38 +327,42 @@ export default function PayWallPage() {
       <div className="section-divider" />
 
       {/* ══════════════════════════════════════════
-          COMO FUNCIONA
+          VÍDEO DEMO
+          Mantido — ótimo para mostrar simplicidade do app.
+          Copy simplificada.
       ═════════════════════════════════════════════ */}
-      <section className="como-funciona">
+      <section className="video-demo">
         <div className="container">
-          <p className="section-label" style={{ textAlign: "center" }}>Como funciona</p>
-          <h2 style={{ textAlign: "center", fontSize: 24, marginBottom: 32 }}>
-            Do pagamento ao acesso<br />em menos de 1 minuto.
+          <p className="video-demo__label">Veja como funciona</p>
+          <h2 className="video-demo__title">
+            Simples assim.<br />Em menos de 2 minutos.
           </h2>
-          <div className="fluxo">
-            {[
-              { n: "1", title: "Clique em \"Liberar acesso\"", desc: "Criamos sua conta rapidinho — 30 segundos, sem complicação." },
-              { n: "2", title: "Pague com cartão ou Pix", desc: "R$19,99 uma única vez. Sem assinar nada, sem dados bancários expostos." },
-              { n: "3", title: "Acesso liberado na hora ✓", desc: "Assim que o pagamento for confirmado, seu acesso vitalício é ativado automaticamente.", accent: true },
-            ].map((step, i) => (
-              <div key={i}>
-                <div className="fluxo-step">
-                  <div className={`fluxo-num${step.accent ? " fluxo-num--accent" : ""}`}>{step.n}</div>
-                  <div className="fluxo-text">
-                    <strong>{step.title}</strong>
-                    <span>{step.desc}</span>
-                  </div>
-                </div>
-                {i < 2 && <div className="fluxo-line" />}
+          <p className="video-demo__sub">
+            Registre um gasto, veja pra onde seu dinheiro foi,<br />
+            entenda o que você pode guardar esse mês.
+          </p>
+
+          <div className="video-demo__phone">
+            <div className="video-demo__glow" />
+            <div className="video-demo__badges">
+              <div className="video-demo__badge video-demo__badge--left">
+                <div className="video-demo__badge-dot" />
+                Gastos em tempo real
               </div>
-            ))}
-          </div>
-          <div className="mp-badge-large">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5DCAA5" strokeWidth="2">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-              <polyline points="9 12 11 14 15 10"/>
-            </svg>
-            <span>Pagamento processado com segurança pelo <strong>Mercado Pago</strong> — a maior plataforma de pagamentos da América Latina</span>
+              <div className="video-demo__badge video-demo__badge--right">
+                <div className="video-demo__badge-dot" />
+                Análise automática
+              </div>
+            </div>
+            <div className="video-demo__frame">
+              <div className="video-demo__notch" />
+              <video
+                className="video-demo__video"
+                autoPlay muted loop playsInline preload="none"
+              >
+                <source src={videoDemoSrc} type="video/mp4" />
+              </video>
+            </div>
           </div>
         </div>
       </section>
@@ -361,20 +370,24 @@ export default function PayWallPage() {
       <div className="section-divider" />
 
       {/* ══════════════════════════════════════════
-          FEATURES (com CTA inline após cada 2)
+          FEATURES — versão condensada
+          COPY: Mantidas as 3 mais relevantes para o público frio.
+          Removidas: Relatório PDF e seção de Simulações
+          (muito técnico para decisão rápida de tráfego frio).
+          Cada feature tem 1 frase de dor + 1 de solução.
       ═════════════════════════════════════════════ */}
 
-      {/* 1. Controle financeiro */}
+      {/* 1. Dashboard */}
       <section className="feature-showcase">
         <div className="container">
           <div className="showcase-text">
             <p className="section-label">Controle financeiro</p>
-            <h2>Seu dinheiro,<br />numa só tela.</h2>
-            <p>Veja patrimônio, sobra mensal, gastos e crescimento assim que abrir o app. Sem navegar, sem procurar — tudo no dashboard.</p>
+            <h2>Tudo o que você precisa<br />numa só tela.</h2>
+            <p>Assim que você abre o app, já sabe: quanto entrou, quanto saiu, quanto ainda pode gastar. Sem procurar, sem calcular.</p>
             <ul className="showcase-checks">
-              <li>Patrimônio projetado em tempo real</li>
               <li>Sobra mensal calculada automaticamente</li>
               <li>Gastos fixos e variáveis separados</li>
+              <li>Patrimônio atualizado em tempo real</li>
             </ul>
           </div>
           <div className="showcase-phone">
@@ -386,69 +399,17 @@ export default function PayWallPage() {
 
       <div className="section-divider" />
 
-      {/* 2. Investimentos */}
-      <section className="feature-showcase feature-showcase--reverse">
-        <div className="container">
-          <div className="showcase-text">
-            <p className="section-label">Investimentos</p>
-            <h2>Veja sua carteira<br />crescer de verdade.</h2>
-            <p>Monte sua carteira com CDI, Selic, CDB e FII. O app calcula o rendimento real com IR regressivo incluso — sem enganação.</p>
-            <ul className="showcase-checks">
-              <li>Composição da carteira por tipo</li>
-              <li>Projeção de patrimônio mês a mês</li>
-              <li>Cálculo de IR regressivo automático</li>
-            </ul>
-          </div>
-          <div className="showcase-phone">
-            <div className="showcase-glow showcase-glow--blue" />
-            <img src={investirImg} alt="Tela de investimentos" className="showcase-img" />
-          </div>
-        </div>
-      </section>
-
-      {/* ── CTA INLINE #1 ── */}
-      <div className="inline-cta-block">
-        <div className="container">
-          <p className="inline-cta-copy">Pronto para sair do achismo?</p>
-          <CheckoutButton label="Quero começar agora →" />
-        </div>
-      </div>
-
-      <div className="section-divider" />
-
-      {/* 3. Simulações */}
-      <section className="feature-showcase">
-        <div className="container">
-          <div className="showcase-text">
-            <p className="section-label">Simulações</p>
-            <h2>E se eu guardar<br />R$200 a mais?</h2>
-            <p>Simule diferentes cenários e veja o impacto no seu patrimônio. Decida com dados, não com achismo.</p>
-            <ul className="showcase-checks">
-              <li>Simulação de aportes mensais</li>
-              <li>Comparação entre investimentos</li>
-              <li>Projeção de metas financeiras</li>
-            </ul>
-          </div>
-          <div className="showcase-phone">
-            <div className="showcase-glow showcase-glow--purple" />
-            <img src={simulacoesImg} alt="Tela de simulações" className="showcase-img" />
-          </div>
-        </div>
-      </section>
-
-      <div className="section-divider" />
-
-      {/* 4. Análises */}
+      {/* 2. Análises */}
       <section className="feature-showcase feature-showcase--reverse">
         <div className="container">
           <div className="showcase-text">
             <p className="section-label">Análises</p>
-            <h2>Entenda onde<br />o dinheiro foi.</h2>
-            <p>Gráficos claros que mostram seus padrões de gasto, evolução do patrimônio e onde você pode melhorar.</p>
+            <h2>Descubra onde<br />o dinheiro foi parar.</h2>
+            <p>Gráficos simples que mostram seus padrões de gasto. Você vai identificar em segundos o que está sugando seu dinheiro todo mês.</p>
             <ul className="showcase-checks">
               <li>Gráficos de evolução mensal</li>
-              <li>Análise de padrões de gasto</li>
-              <li>Score de comportamento financeiro</li>
+              <li>Categorias de gasto identificadas</li>
+              <li>Padrões que você nunca tinha percebido</li>
             </ul>
           </div>
           <div className="showcase-phone">
@@ -458,24 +419,32 @@ export default function PayWallPage() {
         </div>
       </section>
 
+      {/* ── CTA INLINE ── */}
+      <div className="inline-cta-block">
+        <div className="container">
+          <p className="inline-cta-copy">R$19,99 pra ter clareza total do seu dinheiro.</p>
+          <CheckoutButton label="Quero meu acesso agora →" />
+        </div>
+      </div>
+
       <div className="section-divider" />
 
-      {/* 5. Relatório */}
+      {/* 3. Investimentos */}
       <section className="feature-showcase">
         <div className="container">
           <div className="showcase-text">
-            <p className="section-label">Relatórios</p>
-            <h2>Tudo registrado,<br />nada esquecido.</h2>
-            <p>Exporte o resumo do mês em PDF com todos os lançamentos, metas e projeções. Perfeito para acompanhar a evolução.</p>
+            <p className="section-label">Investimentos</p>
+            <h2>Veja seu dinheiro<br />crescer, mesmo que seja pouco.</h2>
+            <p>Registre o que você guarda e veja a projeção real de crescimento — seja R$50 ou R$500 por mês. O app calcula tudo por você.</p>
             <ul className="showcase-checks">
-              <li>Exportação em PDF completa</li>
-              <li>Histórico de lançamentos</li>
-              <li>Resumo mensal detalhado</li>
+              <li>CDI, Selic, CDB e mais</li>
+              <li>Projeção mês a mês</li>
+              <li>Imposto de renda já incluso no cálculo</li>
             </ul>
           </div>
           <div className="showcase-phone">
-            <div className="showcase-glow showcase-glow--orange" />
-            <img src={relatorioImg} alt="Tela de relatório" className="showcase-img" />
+            <div className="showcase-glow showcase-glow--blue" />
+            <img src={investirImg} alt="Tela de investimentos" className="showcase-img" />
           </div>
         </div>
       </section>
@@ -483,12 +452,14 @@ export default function PayWallPage() {
       <div className="section-divider" />
 
       {/* ══════════════════════════════════════════
-          DEPOIMENTOS — seção mais importante nova
+          DEPOIMENTOS
+          COPY: Apresentados como "pessoas reais" antes do preço.
+          Isso reduz desconfiança antes da decisão.
       ═════════════════════════════════════════════ */}
       <section className="depoimentos">
         <div className="container">
-          <p className="section-label" style={{ textAlign: "center" }}>O que dizem quem já usa</p>
-          <h2 className="depoimentos-title">Pessoas reais.<br />Resultado real.</h2>
+          <p className="section-label" style={{ textAlign: "center" }}>Quem já usa</p>
+          <h2 className="depoimentos-title">Não é propaganda.<br />É quem já estava no mesmo lugar que você.</h2>
           <div className="depoimentos-list">
             {DEPOIMENTOS.map((d, i) => (
               <div key={i} className="depoimento-card">
@@ -515,125 +486,68 @@ export default function PayWallPage() {
       <div className="section-divider" />
 
       {/* ══════════════════════════════════════════
-          BENEFÍCIOS
-      ═════════════════════════════════════════════ */}
-      <section className="beneficios">
-        <div className="container">
-          <p className="section-label" style={{ textAlign: "center" }}>O que você tem acesso</p>
-          <h2>Tudo que você precisa.<br />Nada que você não precisa.</h2>
-          <div className="benefit-grid">
-            {[
-              { icon: "📊", title: "Dashboard inteligente",      desc: "Patrimônio, sobra e crescimento numa só tela." },
-              { icon: "💳", title: "Fontes de pagamento",         desc: "Separe gastos por cartão, conta ou benefício." },
-              { icon: "🎯", title: "Metas financeiras",           desc: "Define objetivos e acompanha o progresso mês a mês." },
-              { icon: "📈", title: "Projeção de investimentos",   desc: "CDI, Selic, CDB e FII com IR real calculado." },
-              { icon: "🔔", title: "Alertas inteligentes",        desc: "Avisa antes do limite do cartão estourar." },
-              { icon: "📄", title: "Relatório em PDF",            desc: "Exporta o mês completo para compartilhar." },
-            ].map((b) => (
-              <div key={b.title} className="benefit-item">
-                <span className="b-icon">{b.icon}</span>
-                <h4>{b.title}</h4>
-                <p>{b.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <div className="section-divider" />
-
-      {/* ══════════════════════════════════════════
-          RESULTADO
-      ═════════════════════════════════════════════ */}
-      <section className="resultado">
-        <div className="container">
-          <p className="section-label">O que muda na prática</p>
-          <h2>Em poucos dias você já sente a diferença.</h2>
-          <p>Não é promessa — é o que acontece quando você para de adivinhar e começa a enxergar.</p>
-          <div className="resultado-cards">
-            {[
-              { when: "No primeiro dia:",    what: "você vê pela primeira vez para onde vai cada real que entra na sua conta." },
-              { when: "Na primeira semana:", what: "você identifica os gastos que somem sem deixar rastro." },
-              { when: "No final do mês:",    what: "você chega com sobra — e sabe exatamente quanto pode investir." },
-              { when: "Em 3 meses:",         what: "você começa a ver seu patrimônio crescer de acordo com a projeção." },
-            ].map((r) => (
-              <div key={r.when} className="resultado-card">
-                <div className="resultado-dot" />
-                <p><strong>{r.when}</strong> {r.what}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <div className="section-divider" />
-
-      {/* ══════════════════════════════════════════
           PREÇO
+          COPY: Explicar POR QUE é barato (remove desconfiança).
+          Comparação com algo cotidiano (iFood).
+          Contador de urgência junto ao preço.
       ═════════════════════════════════════════════ */}
       <section className="preco" id="cta">
         <div className="container">
-          <p className="section-label" style={{ textAlign: "center", marginBottom: 20 }}>Investimento único</p>
+          <p className="section-label" style={{ textAlign: "center", marginBottom: 20 }}>Investimento</p>
           <div className="preco-card">
-            <div className="preco-desconto-badge">83% OFF — Oferta por tempo limitado</div>
+
+            <div className="preco-desconto-badge">83% OFF · Oferta por tempo limitado</div>
             <div className="preco-tag">Acesso vitalício</div>
             <div className="preco-de-label">De <s>R$ 119,99</s> por apenas</div>
             <div className="preco-numero"><sup>R$</sup>19<span className="preco-cents">,99</span></div>
             <p className="preco-tipo">PAGAMENTO ÚNICO · SEM MENSALIDADE</p>
 
-            {/* Comparação visual */}
+            {/* Por que é barato — derruba a desconfiança */}
+            <div className="preco-why">
+              <div className="preco-why__icon">💬</div>
+              <p className="preco-why__text">
+                "Por que tão barato?" — Porque queremos que qualquer pessoa consiga controlar o dinheiro, não só quem pode pagar assinatura cara todo mês. R$19 uma vez é mais honesto do que R$30 por mês pra sempre.
+              </p>
+            </div>
+
+            {/* Comparação visual simples */}
             <div className="preco-comparacoes">
               <div className="preco-comp">menos que um lanche no iFood</div>
-              <div className="preco-comp">menos de R$0,06 por dia pelo acesso</div>
-              <div className="preco-comp">menos que qualquer assinatura mensal de app</div>
+              <div className="preco-comp">menos de R$0,06 por dia de acesso</div>
+              <div className="preco-comp">menos que qualquer assinatura mensal</div>
             </div>
 
-            {/* Comparação com concorrentes */}
-            <div className="vs-table">
-              <div className="vs-row vs-header">
-                <span>Recurso</span>
-                <span className="vs-luna">Luna</span>
-                <span className="vs-outros">Apps grátis</span>
+            {/* Contador de urgência próximo ao CTA */}
+            {!expired && (
+              <div className="offer-timer offer-timer--card">
+                <span className="offer-timer__label">Oferta expira em</span>
+                <span className="offer-timer__clock">{countdown}</span>
               </div>
-              {[
-                ["IR regressivo automático", true, false],
-                ["Projeção de patrimônio", true, false],
-                ["Sem anúncios", true, false],
-                ["Pagamento único", true, false],
-                ["Dashboard completo", true, "parcial"],
-              ].map(([feat, luna, outros]) => (
-                <div key={feat} className="vs-row">
-                  <span>{feat}</span>
-                  <span className="vs-luna">{luna === true ? "✓" : luna}</span>
-                  <span className="vs-outros">{outros === false ? "✕" : outros}</span>
-                </div>
-              ))}
-            </div>
+            )}
 
-            <CheckoutButton label="Quero controlar meu dinheiro agora →" showSelos={true} />
+            <CheckoutButton label="Quero controlar meu dinheiro agora →" showSelos />
           </div>
         </div>
       </section>
 
       {/* ══════════════════════════════════════════
-          GARANTIA — seção dedicada
+          GARANTIA
       ═════════════════════════════════════════════ */}
       <section className="garantia-full">
         <div className="container">
           <div className="garantia-full-inner">
             <div className="garantia-shield">🛡️</div>
-            <h3>Garantia incondicional de 7 dias</h3>
+            <h3>Compra 100% sem risco</h3>
             <p>
-              Compre hoje com total segurança. Se por qualquer motivo você não gostar —
-              ou simplesmente mudar de ideia — basta me mandar uma mensagem no WhatsApp
-              em até 7 dias após a compra. Devolvo <strong>100% do seu dinheiro</strong>,
-              sem burocracia, sem perguntas. O risco é zero do seu lado.
+              Se em até 7 dias você não gostar — por qualquer motivo —
+              me manda uma mensagem no WhatsApp e devolvo <strong>100% do valor</strong> na hora.
+              Sem burocracia, sem pergunta, sem enrolação.
             </p>
-            <button onClick={handleSupportClick} className="btn-support" style={{ marginTop: 12 }}>
+            <button onClick={handleSupportClick} className="btn-support" style={{ marginTop: 12, justifyContent: "center" }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
               </svg>
-              Falar com suporte via WhatsApp
+              Falar com suporte antes de comprar
             </button>
           </div>
         </div>
@@ -642,12 +556,14 @@ export default function PayWallPage() {
       <div className="section-divider" />
 
       {/* ══════════════════════════════════════════
-          FAQ — elimina objeções
+          FAQ
+          COPY: 4 perguntas = as 4 maiores objeções de quem não compra.
+          Respostas curtas e diretas.
       ═════════════════════════════════════════════ */}
       <section className="faq">
         <div className="container">
           <p className="section-label" style={{ textAlign: "center" }}>Dúvidas frequentes</p>
-          <h2 className="faq-title">Antes de ir embora,<br />leia isso.</h2>
+          <h2 className="faq-title">Antes de fechar<br />a página, leia isso.</h2>
           <div className="faq-list">
             {FAQ_ITEMS.map((item, i) => (
               <div key={i} className={`faq-item${openFaq === i ? " faq-item--open" : ""}`}>
@@ -669,15 +585,21 @@ export default function PayWallPage() {
 
       {/* ══════════════════════════════════════════
           CTA FINAL
+          COPY: Headline emocional, não técnica.
+          Lembrar o preço + urgência + garantia numa frase.
       ═════════════════════════════════════════════ */}
       <section className="cta-final">
         <div className="container">
           <h2>Chega de mês<br />terminando no <em>vermelho.</em></h2>
-          <p>De R$119,99 por apenas R$19,99 — pagamento único, acesso para sempre.</p>
-          <CheckoutButton label="Quero controlar meu dinheiro agora →" showSelos={true} />
+          <p>
+            R$19,99 uma única vez. Se não gostar em 7 dias, devolvemos tudo.
+            {!expired && <> Oferta expira em <strong className="cta-final__timer">{countdown}</strong>.</>}
+          </p>
+          <CheckoutButton label="Quero controlar meu dinheiro agora →" />
         </div>
       </section>
 
+      {/* ── FOOTER ── */}
       <footer className="footer">
         <div className="container" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
           <span>Luna Finance · Todos os direitos reservados</span>
