@@ -6,6 +6,8 @@ const { handleMercadoPagoWebhook } = require("./mercadoPagoWebhook");
 const { checkoutRoutes } = require("./checkoutRoutes");
 
 const app = express();
+const { handleProcessPayment } = require("./mercadopago.process"); 
+
 
 app.use(
   cors({
@@ -28,6 +30,8 @@ app.get("/health", (_req, res) => {
 
 app.use("/admin", adminRoutes);
 app.use("/checkout", checkoutRoutes);
+
+app.post("/checkout/mercadopago/process", handleProcessPayment);
 
 app.post("/webhook/mercadopago", (req, res) => {
   handleMercadoPagoWebhook(req, res);

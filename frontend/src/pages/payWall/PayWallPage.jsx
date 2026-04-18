@@ -4,6 +4,8 @@ import { useAuth } from "../../contexts/AuthContext";
 import AuthModal from "../../components/auth/AuthModal";
 import { pixelInitiateCheckout } from '@/lib/metaPixel';
 import videoDemoSrc from "@/assets/videoDemo.mp4";
+import CheckoutBricks from "@/components/checkout/CheckoutBricks";
+
 
 import avatar1Img from "@/assets/avatar1.png";
 import avatar2Img from "@/assets/avatar2.png";
@@ -24,7 +26,6 @@ const SUPPORT_PHONE = "5522992080811";
 const SUPPORT_MESSAGE = "Olá! Preciso de suporte com o Luna Finance.";
 
 // ── DEPOIMENTOS ────────────────────────────────────────────────────────────
-// COPY: Depoimentos curtos, coloquiais, com dor real → resultado real.
 const DEPOIMENTOS = [
   {
     nome: "Mariana S.",
@@ -50,7 +51,6 @@ const DEPOIMENTOS = [
 ];
 
 // ── FAQ ─────────────────────────────────────────────────────────────────────
-// COPY: Foco nas 3 objeções reais de quem hesita na compra.
 const FAQ_ITEMS = [
   {
     q: "Por que só R$19,99? Tem mensalidade escondida?",
@@ -71,8 +71,6 @@ const FAQ_ITEMS = [
 ];
 
 // ── CONTADOR DE OFERTA ───────────────────────────────────────────────────────
-// Gera um tempo fixo por sessão (4h a partir do acesso).
-// Salvo em sessionStorage pra não resetar no reload.
 function getOfferExpiry() {
   const key = "luna_offer_expiry";
   let expiry = sessionStorage.getItem(key);
@@ -113,62 +111,24 @@ function useCountdown() {
 
 export default function PayWallPage() {
   const { user } = useAuth();
-  const [showModal, setShowModal] = useState(false);
-  const [loading, setLoading]     = useState(false);
-  const [error, setError]         = useState(null);
-  const [openFaq, setOpenFaq]     = useState(null);
+  const [showModal, setShowModal]       = useState(false);
+  const [loading, setLoading]           = useState(false);
+  const [error, setError]               = useState(null);
+  const [openFaq, setOpenFaq]           = useState(null);
   const { display: countdown, expired } = useCountdown();
+  const [showBricks, setShowBricks]     = useState(false);
 
-  useEffect(() => {
-    const script = document.createElement("script");
-    script.src = "https://sdk.mercadopago.com/js/v2";
-    script.async = true;
-    document.body.appendChild(script);
-    return () => document.body.removeChild(script);
-  }, []);
-
-  async function startCheckout() {
-    const currentUser = user ?? (await waitForUser());
-    if (!currentUser) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const resp = await fetch(`${BACKEND_URL}/checkout/mercadopago/preference`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uid: currentUser.uid }),
-      });
-      if (!resp.ok) throw new Error("Não foi possível iniciar o pagamento. Tente novamente.");
-      const data = await resp.json();
-      if (!data.id) throw new Error("Preferência de pagamento não encontrada.");
-      const mp = new window.MercadoPago(process.env.REACT_APP_MP_PUBLIC_KEY, { locale: "pt-BR" });
-      mp.checkout({ preference: { id: data.id }, autoOpen: true });
-    } catch (err) {
-      setError(err.message || "Erro inesperado. Tente novamente.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function waitForUser() {
-    const { auth } = await import("../../lib/firebase");
-    for (let i = 0; i < 15; i++) {
-      if (auth.currentUser) return auth.currentUser;
-      await new Promise((r) => setTimeout(r, 200));
-    }
-    return null;
-  }
 
   function handleCTAClick(e) {
     e.preventDefault();
     pixelInitiateCheckout();
-    if (user) startCheckout();
-    else setShowModal(true);
+    if (user) setShowBricks(true);
+    else setShowModal(true); 
   }
 
   function handleAuthSuccess() {
     setShowModal(false);
-    startCheckout();
+    setShowBricks(true);
   }
 
   function handleSupportClick() {
@@ -225,6 +185,12 @@ export default function PayWallPage() {
     <>
       {showModal && (
         <AuthModal onSuccess={handleAuthSuccess} onClose={() => setShowModal(false)} />
+      )}
+      {showBricks && user && (   
+        <CheckoutBricks
+          uid={user.uid}
+          onClose={() => setShowBricks(false)}
+        />
       )}
 
       {/* ══════════════════════════════════════════
