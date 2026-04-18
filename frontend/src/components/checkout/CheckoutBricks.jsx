@@ -73,7 +73,6 @@ export default function CheckoutBricks({ uid, onClose }) {
           {
             initialization: {
               amount: 19.99,
-              preferenceId,
             },
             customization: {
               paymentMethods: {

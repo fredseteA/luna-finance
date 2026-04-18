@@ -25,8 +25,6 @@ async function processPayment({ formData, uid }) {
   const publicBaseUrl = requireEnv("PUBLIC_BASE_URL");
   const backendBaseUrl = requireEnv("BACKEND_BASE_URL");
 
-  // Monta o payload de pagamento com o external_reference = uid
-  // para o webhook conseguir identificar o usuário
   const payload = {
     ...formData,
     external_reference: String(uid),
@@ -68,11 +66,7 @@ async function handleProcessPayment(req, res) {
       uid,
     });
 
-    return res.status(200).json({
-      id: payment?.id,
-      status: payment?.status,
-      status_detail: payment?.status_detail,
-    });
+    return res.status(200).json(payment);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error("[mercadopago:process] error", err);
