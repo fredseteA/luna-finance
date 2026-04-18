@@ -1,7 +1,4 @@
 // CheckoutBricks.jsx
-// Renderiza o checkout do Mercado Pago Bricks diretamente na paywall.
-// O usuário não sai da página — o brick abre como um accordion abaixo do botão.
-
 import { useEffect, useRef, useState } from "react";
 
 const BACKEND_URL =
@@ -9,22 +6,53 @@ const BACKEND_URL =
   process.env.REACT_APP_BACKEND_BASE_URL ||
   "http://localhost:4000";
 
+// Variáveis aceitas pela API do Bricks (subset validado pela documentação oficial)
+const BRICK_CUSTOM_VARIABLES = {
+  textPrimaryColor:   "#f0faf6",
+  textSecondaryColor: "#7ab89a",
+  inputBackgroundColor: "#162620",
+  formBackgroundColor:  "#0e1a16",
+  baseColor:            "#1D9E75",
+  baseColorFirstVariant:  "#188661",
+  baseColorSecondVariant: "#0e4a35",
+  errorColor:   "#e24b4a",
+  successColor: "#1D9E75",
+  warningColor: "#f59e0b",
+  outlinePrimaryColor:   "#5DCAA5",
+  outlineSecondaryColor: "rgba(93,202,165,0.3)",
+  borderRadiusSmall:  "8px",
+  borderRadiusMedium: "12px",
+  borderRadiusLarge:  "14px",
+  borderRadiusFull:   "100px",
+  fontSizeExtraSmall: "11px",
+  fontSizeSmall:      "13px",
+  fontSizeMedium:     "14px",
+  fontSizeLarge:      "16px",
+  fontWeightNormal:   "400",
+  fontWeightSemiBold: "600",
+};
+
 export default function CheckoutBricks({ uid, onClose }) {
-  const brickRef = useRef(null);
+  const wrapperRef    = useRef(null);
   const controllerRef = useRef(null);
-  const [status, setStatus] = useState("loading"); // "loading" | "ready" | "error"
+  const [status, setStatus] = useState("loading");
+
+  // Scroll automático até o checkout quando abrir
+  useEffect(() => {
+    if (wrapperRef.current) {
+      setTimeout(() => {
+        wrapperRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
 
     async function init() {
       try {
-        // 1. Garante que o SDK do MP está carregado
-        if (!window.MercadoPago) {
-          await loadSDK();
-        }
+        if (!window.MercadoPago) await loadSDK();
 
-        // 2. Cria preferência no backend
         const resp = await fetch(`${BACKEND_URL}/checkout/mercadopago/preference`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -35,14 +63,11 @@ export default function CheckoutBricks({ uid, onClose }) {
         if (!preferenceId) throw new Error("Preferência inválida");
         if (cancelled) return;
 
-        // 3. Inicializa o MP e monta o brick
         const mp = new window.MercadoPago(process.env.REACT_APP_MP_PUBLIC_KEY, {
           locale: "pt-BR",
         });
 
-        const bricksBuilder = mp.bricks();
-
-        controllerRef.current = await bricksBuilder.create(
+        controllerRef.current = await mp.bricks().create(
           "payment",
           "checkout-bricks-container",
           {
@@ -52,45 +77,17 @@ export default function CheckoutBricks({ uid, onClose }) {
             },
             customization: {
               paymentMethods: {
-                ticket: "all",         // boleto
-                bankTransfer: "all",   // pix
-                creditCard: "all",
-                debitCard: "all",
-                mercadoPago: "all",    // carteira MP
+                ticket:       "all",
+                bankTransfer: "all",
+                creditCard:   "all",
+                debitCard:    "all",
+                mercadoPago:  "all",
               },
               visual: {
+                hideFormTitle: true,
                 style: {
                   theme: "dark",
-                  customVariables: {
-                    // Fundo e containers
-                    formBackgroundColor:        "#1a2e26",
-                    baseColor:                  "#1D9E75",
-                    inputBackgroundColor:        "#162620",
-                    inputBorderColor:            "rgba(93,202,165,0.2)",
-                    inputFocusedBorderColor:     "#5DCAA5",
-                    inputTextColor:              "#f0faf6",
-                    inputPlaceholderColor:       "#7ab89a",
-                    labelTextColor:              "#7ab89a",
-                    textPrimaryColor:            "#f0faf6",
-                    textSecondaryColor:          "#7ab89a",
-                    // Botão de pagamento
-                    buttonTextColor:             "#ffffff",
-                    buttonBackground:            "#1D9E75",
-                    buttonHoverBackground:       "#188661",
-                    buttonDisabledBackground:    "#0e4a35",
-                    buttonDisabledTextColor:     "rgba(255,255,255,0.4)",
-                    // Bordas e raios
-                    borderRadiusSmall:           "8px",
-                    borderRadiusMedium:          "12px",
-                    borderRadiusLarge:           "14px",
-                    borderRadiusFull:            "100px",
-                    // Outline e erros
-                    outlinePrimaryColor:         "#5DCAA5",
-                    outlineSecondaryColor:       "rgba(93,202,165,0.3)",
-                    errorColor:                  "#e24b4a",
-                    warningColor:                "#f59e0b",
-                    successColor:                "#1D9E75",
-                  },
+                  customVariables: BRICK_CUSTOM_VARIABLES,
                 },
               },
             },
@@ -99,39 +96,32 @@ export default function CheckoutBricks({ uid, onClose }) {
                 if (!cancelled) setStatus("ready");
               },
               onError: (error) => {
-                console.error("[CheckoutBricks] error:", error);
+                console.error("[CheckoutBricks]", error);
                 if (!cancelled) setStatus("error");
               },
-              onSubmit: ({ selectedPaymentMethod, formData }) => {
-                // O Bricks envia o pagamento direto para o MP
-                // O webhook cuida do resto (setUserPremium)
-                return new Promise((resolve, reject) => {
+              onSubmit: ({ formData }) =>
+                new Promise((resolve, reject) => {
                   fetch(`${BACKEND_URL}/checkout/mercadopago/process`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ formData, uid }),
                   })
                     .then((r) => r.json())
-                    .then((data) => {
-                      if (data?.error) reject(data.error);
-                      else resolve(data);
-                    })
+                    .then((data) => (data?.error ? reject(data.error) : resolve(data)))
                     .catch(reject);
-                });
-              },
+                }),
             },
           }
         );
 
         if (cancelled) controllerRef.current?.unmount();
       } catch (err) {
-        console.error("[CheckoutBricks] init error:", err);
+        console.error("[CheckoutBricks] init:", err);
         if (!cancelled) setStatus("error");
       }
     }
 
     init();
-
     return () => {
       cancelled = true;
       controllerRef.current?.unmount?.();
@@ -139,232 +129,208 @@ export default function CheckoutBricks({ uid, onClose }) {
   }, [uid]);
 
   return (
-    <div style={styles.wrapper}>
-      {/* Header */}
-      <div style={styles.header}>
-        <div style={styles.headerLeft}>
-          <span style={styles.lockIcon}>🔒</span>
-          <div>
-            <p style={styles.headerTitle}>Pagamento seguro</p>
-            <p style={styles.headerSub}>Processado pelo Mercado Pago · SSL 256 bits</p>
-          </div>
+    <div ref={wrapperRef} style={s.wrapper}>
+
+      {/* Header compacto */}
+      <div style={s.header}>
+        <div style={s.headerLeft}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#5DCAA5" strokeWidth="2.5">
+            <rect x="3" y="11" width="18" height="11" rx="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+          <span style={s.headerTitle}>Pagamento seguro · Mercado Pago</span>
         </div>
-        <button onClick={onClose} style={styles.closeBtn} aria-label="Fechar checkout">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
+        <button onClick={onClose} style={s.closeBtn} aria-label="Fechar">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
           </svg>
         </button>
       </div>
 
-      {/* Price reminder */}
-      <div style={styles.priceReminder}>
-        <span style={styles.priceLabel}>Luna Finance — Acesso vitalício</span>
-        <div style={styles.priceValue}>
-          <span style={styles.priceFrom}>De <s style={{ color: "#e24b4a" }}>R$119,99</s></span>
-          <span style={styles.priceMain}>R$19,99</span>
-          <span style={styles.priceBadge}>ÚNICO</span>
+      {/* Lembrete de preço compacto */}
+      <div style={s.priceBar}>
+        <span style={s.priceBarLabel}>Luna Finance — Acesso vitalício</span>
+        <div style={s.priceBarRight}>
+          <s style={s.priceOld}>R$119,99</s>
+          <strong style={s.priceNew}>R$19,99</strong>
+          <span style={s.priceBadge}>ÚNICO</span>
         </div>
       </div>
 
-      {/* Brick container */}
-      <div style={styles.brickContainer}>
+      {/* Brick */}
+      <div style={s.brickWrap}>
         {status === "loading" && (
-          <div style={styles.loadingWrap}>
-            <div style={styles.spinner} />
-            <p style={styles.loadingText}>Carregando formas de pagamento...</p>
+          <div style={s.centered}>
+            <div style={s.spinner} />
+            <p style={s.mutedText}>Carregando formas de pagamento...</p>
           </div>
         )}
-
         {status === "error" && (
-          <div style={styles.errorWrap}>
-            <p style={styles.errorText}>Erro ao carregar o checkout. Tente novamente.</p>
-            <button onClick={() => window.location.reload()} style={styles.retryBtn}>
+          <div style={s.centered}>
+            <p style={s.errorText}>Erro ao carregar o checkout.</p>
+            <button onClick={() => window.location.reload()} style={s.retryBtn}>
               Tentar novamente
             </button>
           </div>
         )}
-
-        {/* O brick do MP é montado aqui */}
         <div
           id="checkout-bricks-container"
-          ref={brickRef}
           style={{ display: status === "ready" ? "block" : "none" }}
         />
       </div>
 
       {/* Trust strip */}
-      <div style={styles.trustStrip}>
-        <span style={styles.trustItem}>🛡️ 7 dias de garantia</span>
-        <span style={styles.trustDot}>·</span>
-        <span style={styles.trustItem}>⚡ Acesso imediato</span>
-        <span style={styles.trustDot}>·</span>
-        <span style={styles.trustItem}>🔒 Pagamento seguro</span>
+      <div style={s.trustStrip}>
+        <span style={s.trustItem}>🛡️ 7 dias de garantia</span>
+        <span style={s.dot}>·</span>
+        <span style={s.trustItem}>⚡ Acesso imediato</span>
+        <span style={s.dot}>·</span>
+        <span style={s.trustItem}>🔒 SSL 256 bits</span>
       </div>
     </div>
   );
 }
 
-// Carrega o SDK do MP dinamicamente se ainda não estiver na página
 function loadSDK() {
   return new Promise((resolve, reject) => {
     if (document.querySelector('script[src*="mercadopago"]')) {
-      const interval = setInterval(() => {
-        if (window.MercadoPago) { clearInterval(interval); resolve(); }
+      const t = setInterval(() => {
+        if (window.MercadoPago) { clearInterval(t); resolve(); }
       }, 100);
       return;
     }
-    const script = document.createElement("script");
-    script.src = "https://sdk.mercadopago.com/js/v2";
-    script.async = true;
-    script.onload = resolve;
-    script.onerror = reject;
-    document.body.appendChild(script);
+    const sc = document.createElement("script");
+    sc.src = "https://sdk.mercadopago.com/js/v2";
+    sc.async = true;
+    sc.onload = resolve;
+    sc.onerror = reject;
+    document.body.appendChild(sc);
   });
 }
 
-const styles = {
+const s = {
   wrapper: {
-    background: "#1a2e26",
-    border: "1px solid rgba(93,202,165,0.25)",
-    borderRadius: "20px",
+    background: "#0e1a16",
+    border: "1px solid rgba(93,202,165,0.2)",
+    borderRadius: "16px",
     overflow: "hidden",
-    marginTop: "16px",
-    animation: "fadeUp 0.3s ease both",
+    marginTop: "12px",
   },
   header: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: "16px 20px",
-    borderBottom: "1px solid rgba(93,202,165,0.12)",
+    padding: "10px 16px",
     background: "rgba(29,158,117,0.06)",
+    borderBottom: "1px solid rgba(93,202,165,0.1)",
   },
   headerLeft: {
     display: "flex",
     alignItems: "center",
-    gap: "10px",
-  },
-  lockIcon: {
-    fontSize: "18px",
+    gap: "7px",
   },
   headerTitle: {
-    fontFamily: "'Sora', sans-serif",
-    fontSize: "13px",
-    fontWeight: 700,
-    color: "#f0faf6",
-    margin: 0,
-    lineHeight: 1.3,
-  },
-  headerSub: {
     fontSize: "11px",
+    fontWeight: 600,
     color: "#7ab89a",
-    margin: 0,
     fontFamily: "'DM Sans', sans-serif",
+    letterSpacing: "0.02em",
   },
   closeBtn: {
-    background: "rgba(93,202,165,0.08)",
-    border: "1px solid rgba(93,202,165,0.15)",
-    borderRadius: "50%",
-    width: "30px",
-    height: "30px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
+    background: "none",
+    border: "none",
     cursor: "pointer",
     color: "#7ab89a",
-    padding: 0,
-    flexShrink: 0,
+    padding: "4px",
+    display: "flex",
+    alignItems: "center",
+    borderRadius: "6px",
+    opacity: 0.7,
   },
-  priceReminder: {
-    padding: "14px 20px",
-    borderBottom: "1px solid rgba(93,202,165,0.1)",
+  priceBar: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: "12px",
+    padding: "10px 16px",
+    borderBottom: "1px solid rgba(93,202,165,0.08)",
+    gap: "8px",
+    flexWrap: "wrap",
   },
-  priceLabel: {
-    fontSize: "13px",
+  priceBarLabel: {
+    fontSize: "12px",
     color: "#7ab89a",
     fontFamily: "'DM Sans', sans-serif",
   },
-  priceValue: {
+  priceBarRight: {
     display: "flex",
     alignItems: "center",
-    gap: "8px",
+    gap: "6px",
     flexShrink: 0,
   },
-  priceFrom: {
+  priceOld: {
     fontSize: "11px",
-    color: "#7ab89a",
+    color: "rgba(226,75,74,0.7)",
+    textDecoration: "line-through",
     fontFamily: "'DM Sans', sans-serif",
   },
-  priceMain: {
+  priceNew: {
     fontFamily: "'Sora', sans-serif",
-    fontSize: "18px",
+    fontSize: "16px",
     fontWeight: 800,
     color: "#fff",
   },
   priceBadge: {
     background: "rgba(29,158,117,0.15)",
-    border: "1px solid rgba(93,202,165,0.25)",
+    border: "1px solid rgba(93,202,165,0.2)",
     borderRadius: "100px",
-    padding: "2px 8px",
-    fontSize: "10px",
+    padding: "2px 7px",
+    fontSize: "9px",
     fontWeight: 700,
     color: "#5DCAA5",
     letterSpacing: "0.06em",
     fontFamily: "'DM Sans', sans-serif",
   },
-  brickContainer: {
-    padding: "20px",
-    minHeight: "120px",
+  brickWrap: {
+    padding: "16px",
+    minHeight: "100px",
   },
-  loadingWrap: {
+  centered: {
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    justifyContent: "center",
-    gap: "12px",
-    padding: "32px 0",
+    gap: "10px",
+    padding: "24px 0",
   },
   spinner: {
-    width: "32px",
-    height: "32px",
+    width: "28px",
+    height: "28px",
     borderRadius: "50%",
-    border: "3px solid rgba(93,202,165,0.2)",
-    borderTop: "3px solid #1D9E75",
+    border: "2.5px solid rgba(93,202,165,0.15)",
+    borderTop: "2.5px solid #1D9E75",
     animation: "spin 0.7s linear infinite",
   },
-  loadingText: {
-    fontSize: "13px",
+  mutedText: {
+    fontSize: "12px",
     color: "#7ab89a",
     fontFamily: "'DM Sans', sans-serif",
     margin: 0,
   },
-  errorWrap: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: "12px",
-    padding: "24px 0",
-  },
   errorText: {
-    fontSize: "13px",
+    fontSize: "12px",
     color: "#e24b4a",
     fontFamily: "'DM Sans', sans-serif",
-    textAlign: "center",
     margin: 0,
+    textAlign: "center",
   },
   retryBtn: {
-    background: "rgba(29,158,117,0.15)",
-    border: "1px solid rgba(93,202,165,0.25)",
-    borderRadius: "10px",
-    padding: "10px 20px",
+    background: "rgba(29,158,117,0.12)",
+    border: "1px solid rgba(93,202,165,0.2)",
+    borderRadius: "8px",
+    padding: "8px 16px",
     color: "#5DCAA5",
     fontFamily: "'DM Sans', sans-serif",
-    fontSize: "13px",
+    fontSize: "12px",
     fontWeight: 600,
     cursor: "pointer",
   },
@@ -372,18 +338,18 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    gap: "8px",
+    gap: "6px",
     flexWrap: "wrap",
-    padding: "12px 20px 16px",
-    borderTop: "1px solid rgba(93,202,165,0.1)",
+    padding: "10px 16px 12px",
+    borderTop: "1px solid rgba(93,202,165,0.08)",
   },
   trustItem: {
-    fontSize: "11px",
+    fontSize: "10px",
     color: "#7ab89a",
     fontFamily: "'DM Sans', sans-serif",
   },
-  trustDot: {
-    fontSize: "11px",
+  dot: {
+    fontSize: "10px",
     color: "rgba(93,202,165,0.2)",
   },
 };
