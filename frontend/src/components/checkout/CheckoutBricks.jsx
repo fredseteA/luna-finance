@@ -36,6 +36,7 @@ export default function CheckoutBricks({ uid, onClose }) {
   const wrapperRef    = useRef(null);
   const controllerRef = useRef(null);
   const [status, setStatus] = useState("loading");
+  const [pixData, setPixData] = useState(null);
 
   // Scroll automático até o checkout quando abrir
   useEffect(() => {
@@ -73,6 +74,7 @@ export default function CheckoutBricks({ uid, onClose }) {
           {
             initialization: {
               amount: 19.99,
+              preferenceId,
             },
             customization: {
               paymentMethods: {
@@ -106,7 +108,19 @@ export default function CheckoutBricks({ uid, onClose }) {
                     body: JSON.stringify({ formData, uid }),
                   })
                     .then((r) => r.json())
-                    .then((data) => (data?.error ? reject(data.error) : resolve(data)))
+                    .then((payment) => {
+                      if (payment?.error) { reject(payment.error); return; }
+
+                      // Se for Pix, pega o QR code e exibe manualmente
+                      const pix = payment?.point_of_interaction?.transaction_data;
+                      if (pix?.qr_code) {
+                        setPixData({
+                          qrCode: pix.qr_code,
+                          qrCodeBase64: pix.qr_code_base64,
+                        });
+                      }
+                      resolve(payment);
+                    })
                     .catch(reject);
                 }),
             },
@@ -178,6 +192,25 @@ export default function CheckoutBricks({ uid, onClose }) {
           style={{ display: status === "ready" ? "block" : "none" }}
         />
       </div>
+
+      {/* QR Code Pix — aparece aqui após o pagamento ser criado */}
+      {pixData && (
+        <div style={s.pixWrap}>
+          <p style={s.pixTitle}>Escaneie o QR Code para pagar</p>
+          <img
+            src={`data:image/png;base64,${pixData.qrCodeBase64}`}
+            alt="QR Code Pix"
+            style={s.pixQr}
+          />
+          <p style={s.pixLabel}>Ou copie o código:</p>
+          <button
+            style={s.pixCopy}
+            onClick={() => navigator.clipboard.writeText(pixData.qrCode)}
+          >
+            Copiar código Pix
+          </button>
+        </div>
+      )}
 
       {/* Trust strip */}
       <div style={s.trustStrip}>
@@ -350,5 +383,45 @@ const s = {
   dot: {
     fontSize: "10px",
     color: "rgba(93,202,165,0.2)",
+  },
+  pixWrap: {
+    padding: "20px 16px",
+    borderTop: "1px solid rgba(93,202,165,0.1)",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: "12px",
+  },
+  pixTitle: {
+    fontFamily: "'Sora', sans-serif",
+    fontSize: "14px",
+    fontWeight: 700,
+    color: "#fff",
+    margin: 0,
+    textAlign: "center",
+  },
+  pixQr: {
+    width: "200px",
+    height: "200px",
+    borderRadius: "12px",
+    border: "1px solid rgba(93,202,165,0.2)",
+  },
+  pixLabel: {
+    fontSize: "12px",
+    color: "#7ab89a",
+    margin: 0,
+    fontFamily: "'DM Sans', sans-serif",
+  },
+  pixCopy: {
+    background: "rgba(29,158,117,0.15)",
+    border: "1px solid rgba(93,202,165,0.25)",
+    borderRadius: "10px",
+    padding: "10px 20px",
+    color: "#5DCAA5",
+    fontFamily: "'DM Sans', sans-serif",
+    fontSize: "13px",
+    fontWeight: 600,
+    cursor: "pointer",
+    width: "100%",
   },
 };
