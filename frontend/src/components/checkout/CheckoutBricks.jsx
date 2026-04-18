@@ -6,7 +6,6 @@ const BACKEND_URL =
   process.env.REACT_APP_BACKEND_BASE_URL ||
   "http://localhost:4000";
 
-// Variáveis aceitas pela API do Bricks (subset validado pela documentação oficial)
 const BRICK_CUSTOM_VARIABLES = {
   textPrimaryColor:   "#f0faf6",
   textSecondaryColor: "#7ab89a",
@@ -34,18 +33,34 @@ const BRICK_CUSTOM_VARIABLES = {
 
 export default function CheckoutBricks({ uid, onClose }) {
   const wrapperRef    = useRef(null);
+  const pixRef        = useRef(null); // ← ref pro bloco do QR code
   const controllerRef = useRef(null);
-  const [status, setStatus] = useState("loading");
+  const [status, setStatus]   = useState("loading");
   const [pixData, setPixData] = useState(null);
+  const [copied, setCopied]   = useState(false); // ← estado do feedback de cópia
 
-  // Scroll automático até o checkout quando abrir
+  // Scroll até o checkout quando abrir
   useEffect(() => {
-    if (wrapperRef.current) {
-      setTimeout(() => {
-        wrapperRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 100);
-    }
+    setTimeout(() => {
+      wrapperRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
   }, []);
+
+  // Scroll até o QR code quando aparecer
+  useEffect(() => {
+    if (pixData) {
+      setTimeout(() => {
+        pixRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 150);
+    }
+  }, [pixData]);
+
+  function handleCopy() {
+    navigator.clipboard.writeText(pixData.qrCode).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    });
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -110,8 +125,6 @@ export default function CheckoutBricks({ uid, onClose }) {
                     .then((r) => r.json())
                     .then((payment) => {
                       if (payment?.error) { reject(payment.error); return; }
-
-                      // Se for Pix, pega o QR code e exibe manualmente
                       const pix = payment?.point_of_interaction?.transaction_data;
                       if (pix?.qr_code) {
                         setPixData({
@@ -144,7 +157,7 @@ export default function CheckoutBricks({ uid, onClose }) {
   return (
     <div ref={wrapperRef} style={s.wrapper}>
 
-      {/* Header compacto */}
+      {/* Header */}
       <div style={s.header}>
         <div style={s.headerLeft}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#5DCAA5" strokeWidth="2.5">
@@ -161,7 +174,7 @@ export default function CheckoutBricks({ uid, onClose }) {
         </button>
       </div>
 
-      {/* Lembrete de preço compacto */}
+      {/* Preço */}
       <div style={s.priceBar}>
         <span style={s.priceBarLabel}>Luna Finance — Acesso vitalício</span>
         <div style={s.priceBarRight}>
@@ -193,22 +206,31 @@ export default function CheckoutBricks({ uid, onClose }) {
         />
       </div>
 
-      {/* QR Code Pix — aparece aqui após o pagamento ser criado */}
+      {/* QR Code Pix */}
       {pixData && (
-        <div style={s.pixWrap}>
-          <p style={s.pixTitle}>Escaneie o QR Code para pagar</p>
+        <div ref={pixRef} style={s.pixWrap}>
+          <div style={s.pixHeader}>
+            <span style={s.pixIcon}>✅</span>
+            <div>
+              <p style={s.pixTitle}>Pix gerado com sucesso!</p>
+              <p style={s.pixSub}>Escaneie o QR Code ou copie o código abaixo</p>
+            </div>
+          </div>
           <img
             src={`data:image/png;base64,${pixData.qrCodeBase64}`}
             alt="QR Code Pix"
             style={s.pixQr}
           />
-          <p style={s.pixLabel}>Ou copie o código:</p>
-          <button
-            style={s.pixCopy}
-            onClick={() => navigator.clipboard.writeText(pixData.qrCode)}
-          >
-            Copiar código Pix
+          <button onClick={handleCopy} style={{
+            ...s.pixCopy,
+            background: copied ? "rgba(29,158,117,0.3)" : "rgba(29,158,117,0.15)",
+            borderColor: copied ? "rgba(93,202,165,0.5)" : "rgba(93,202,165,0.25)",
+          }}>
+            {copied ? "✓ Código copiado!" : "Copiar código Pix"}
           </button>
+          <p style={s.pixNote}>
+            Após o pagamento, seu acesso é liberado automaticamente.
+          </p>
         </div>
       )}
 
@@ -366,6 +388,70 @@ const s = {
     fontWeight: 600,
     cursor: "pointer",
   },
+  // QR Code Pix
+  pixWrap: {
+    padding: "20px 16px",
+    borderTop: "1px solid rgba(93,202,165,0.15)",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: "14px",
+    background: "rgba(29,158,117,0.04)",
+  },
+  pixHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    alignSelf: "flex-start",
+  },
+  pixIcon: {
+    fontSize: "20px",
+    flexShrink: 0,
+  },
+  pixTitle: {
+    fontFamily: "'Sora', sans-serif",
+    fontSize: "14px",
+    fontWeight: 700,
+    color: "#fff",
+    margin: 0,
+    lineHeight: 1.3,
+  },
+  pixSub: {
+    fontSize: "12px",
+    color: "#7ab89a",
+    margin: 0,
+    fontFamily: "'DM Sans', sans-serif",
+    lineHeight: 1.4,
+  },
+  pixQr: {
+    width: "200px",
+    height: "200px",
+    borderRadius: "12px",
+    border: "2px solid rgba(93,202,165,0.2)",
+    background: "#fff",
+    padding: "8px",
+  },
+  pixCopy: {
+    borderRadius: "10px",
+    padding: "12px 20px",
+    color: "#5DCAA5",
+    fontFamily: "'DM Sans', sans-serif",
+    fontSize: "13px",
+    fontWeight: 700,
+    cursor: "pointer",
+    width: "100%",
+    transition: "background 0.2s, border-color 0.2s",
+    letterSpacing: "0.01em",
+  },
+  pixNote: {
+    fontSize: "11px",
+    color: "#7ab89a",
+    margin: 0,
+    fontFamily: "'DM Sans', sans-serif",
+    textAlign: "center",
+    opacity: 0.8,
+  },
+  // Trust strip
   trustStrip: {
     display: "flex",
     alignItems: "center",
@@ -383,45 +469,5 @@ const s = {
   dot: {
     fontSize: "10px",
     color: "rgba(93,202,165,0.2)",
-  },
-  pixWrap: {
-    padding: "20px 16px",
-    borderTop: "1px solid rgba(93,202,165,0.1)",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: "12px",
-  },
-  pixTitle: {
-    fontFamily: "'Sora', sans-serif",
-    fontSize: "14px",
-    fontWeight: 700,
-    color: "#fff",
-    margin: 0,
-    textAlign: "center",
-  },
-  pixQr: {
-    width: "200px",
-    height: "200px",
-    borderRadius: "12px",
-    border: "1px solid rgba(93,202,165,0.2)",
-  },
-  pixLabel: {
-    fontSize: "12px",
-    color: "#7ab89a",
-    margin: 0,
-    fontFamily: "'DM Sans', sans-serif",
-  },
-  pixCopy: {
-    background: "rgba(29,158,117,0.15)",
-    border: "1px solid rgba(93,202,165,0.25)",
-    borderRadius: "10px",
-    padding: "10px 20px",
-    color: "#5DCAA5",
-    fontFamily: "'DM Sans', sans-serif",
-    fontSize: "13px",
-    fontWeight: 600,
-    cursor: "pointer",
-    width: "100%",
   },
 };
