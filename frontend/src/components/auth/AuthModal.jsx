@@ -13,7 +13,7 @@ export default function AuthModal({ onSuccess, onClose }) {
       }
     }
     createAnonAndProceed();
-  }, []);
+  }, [onSuccess, onClose]);
 
   // Mostra loading enquanto cria a conta anônima (< 1 segundo normalmente)
   return (
