@@ -4,7 +4,8 @@ import { useAuth } from "../../contexts/AuthContext";
 import AuthModal from "../../components/auth/AuthModal";
 import { pixelInitiateCheckout } from '@/lib/metaPixel';
 import videoDemoSrc from "@/assets/videoDemo.mp4";
-import CheckoutBricks from "../components/checkout/CheckoutBricks";
+import CheckoutBricks from "@/components/checkout/CheckoutBricks";
+
 
 import avatar1Img from "@/assets/avatar1.png";
 import avatar2Img from "@/assets/avatar2.png";
