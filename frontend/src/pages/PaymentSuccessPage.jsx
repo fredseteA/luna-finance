@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth } from "../lib/firebase";
 import { pixelPurchase } from '@/lib/metaPixel';
+import LinkAccountModal from "@/components/auth/LinkAccountModal";
+
 
 /**
  * PaymentSuccessPage
@@ -14,8 +16,9 @@ import { pixelPurchase } from '@/lib/metaPixel';
  */
 export default function PaymentSuccessPage() {
   const navigate = useNavigate();
-  const [status, setStatus] = useState("verifying"); // "verifying" | "success" | "pending"
+  const [status, setStatus] = useState("verifying"); 
   const [attempt, setAttempt] = useState(0);
+  const [showLinkModal, setShowLinkModal] = useState(false);
 
   const checkPremium = useCallback(async () => {
     const user = auth.currentUser;
@@ -32,7 +35,11 @@ export default function PaymentSuccessPage() {
       if (claims?.isPremium) {
         pixelPurchase(18.99);
         setStatus("success");
-        setTimeout(() => navigate("/"), 2000);
+        if (auth.currentUser?.isAnonymous) {
+          setShowLinkModal(true);
+        } else {
+          setTimeout(() => navigate("/"), 2000);
+        }
         return true;
       }
     } catch (err) {
@@ -115,6 +122,14 @@ export default function PaymentSuccessPage() {
             <p className="text-sm text-gray-500">
               Bem-vindo ao Luna Finance. Redirecionando...
             </p>
+
+            {/* Modal aparece por cima se conta for anônima */}
+            {showLinkModal && (
+              <LinkAccountModal onDone={() => {
+                setShowLinkModal(false);
+                navigate("/");
+              }} />
+            )}
           </>
         )}
 
