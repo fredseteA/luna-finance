@@ -11,6 +11,8 @@ import { useNavigate } from 'react-router-dom';
 import { useFinancial, PAYMENT_SOURCE_TEMPLATES } from '../contexts/FinancialContext';
 import { Card, CardContent } from '../components/ui/card';
 
+import { usePageVariants } from '@/lib/animationVariants';
+
 // ─── Ícone por tipo ───────────────────────────────────────────────────────────
 
 const TYPE_ICONS = {
@@ -416,11 +418,12 @@ export const PaymentSourcesPage = () => {
     formatCurrency,
     mounted,
   } = useFinancial();
+  const { container, item } = usePageVariants();
 
   const navigate = useNavigate();
 
   const [showModal, setShowModal]   = useState(false);
-  const [editSource, setEditSource] = useState(null); // fonte sendo editada
+  const [editSource, setEditSource] = useState(null); 
 
   const handleSave = (sourceData) => {
     if (editSource) {

@@ -13,7 +13,6 @@ import { ExplainableScore } from '../components/score/ExplainableScore';
 import { SuggestionsPanel } from '../components/suggestions/SuggestionsPanel';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
-import { Progress } from '../components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { useFinancial } from '../contexts/FinancialContext';
 import { usePageVariants } from '../lib/animationVariants';
