@@ -6,11 +6,11 @@ import {
   ShoppingBag, MoreHorizontal, ChevronLeft,
   User, Users,
   ToggleLeft, ToggleRight,
+  CalendarClock,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useFinancial, PAYMENT_SOURCE_TEMPLATES } from '../contexts/FinancialContext';
+import { useFinancial, PAYMENT_SOURCE_TEMPLATES, getBillingCycle, formatBillingCycle, daysUntilClosing } from '../contexts/FinancialContext';
 import { Card, CardContent } from '../components/ui/card';
-
 import { usePageVariants } from '@/lib/animationVariants';
 
 // ─── Ícone por tipo ───────────────────────────────────────────────────────────
@@ -32,21 +32,56 @@ const SourceIcon = ({ type, className }) => {
 // ─── Paleta de cores disponíveis ──────────────────────────────────────────────
 
 const COLOR_OPTIONS = [
-  '#22c55e', // verde
-  '#3b82f6', // azul
-  '#a855f7', // roxo
-  '#f59e0b', // âmbar
-  '#ec4899', // rosa
-  '#ef4444', // vermelho
-  '#14b8a6', // teal
-  '#f97316', // laranja
-  '#6b7280', // cinza
+  '#22c55e',
+  '#3b82f6',
+  '#a855f7',
+  '#f59e0b',
+  '#ec4899',
+  '#ef4444',
+  '#14b8a6',
+  '#f97316',
+  '#6b7280',
 ];
+
+// ─── Seletor de dia de fechamento ─────────────────────────────────────────────
+
+const ClosingDayPicker = ({ value, onChange }) => {
+  // Dias disponíveis: 1 a 28 (evita problemas com fevereiro)
+  const days = Array.from({ length: 28 }, (_, i) => i + 1);
+
+  return (
+    <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1">
+      {/* Opção "sem fechamento" */}
+      <button
+        onClick={() => onChange(null)}
+        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all border ${
+          value === null
+            ? 'bg-primary/15 border-primary/40 text-primary'
+            : 'bg-muted/40 border-border text-muted-foreground hover:bg-muted'
+        }`}
+      >
+        Não usar
+      </button>
+      {days.map(d => (
+        <button
+          key={d}
+          onClick={() => onChange(d)}
+          className={`w-9 h-8 rounded-lg text-xs font-mono font-semibold transition-all border ${
+            value === d
+              ? 'bg-primary/15 border-primary/40 text-primary'
+              : 'bg-muted/40 border-border text-muted-foreground hover:bg-muted'
+          }`}
+        >
+          {d}
+        </button>
+      ))}
+    </div>
+  );
+};
 
 // ─── Modal de criação/edição de fonte ────────────────────────────────────────
 
 const SourceModal = ({ source, onClose, onSave }) => {
-  // Inicializa com os dados da fonte existente ou com um template vazio
   const [name,               setName]               = useState(source?.name || '');
   const [type,               setType]               = useState(source?.type || 'checking');
   const [owner,              setOwner]              = useState(source?.owner || 'self');
@@ -55,13 +90,14 @@ const SourceModal = ({ source, onClose, onSave }) => {
   const [isDefault,          setIsDefault]          = useState(source?.isDefault || false);
   const [includeInProjection,setIncludeInProjection]= useState(source?.includeInProjection ?? true);
   const [monthlyLimit,       setMonthlyLimit]       = useState(source?.monthlyLimit?.toString() || '');
+  // closingDay: null = sem fechamento definido; número = dia do mês
+  const [closingDay,         setClosingDay]         = useState(source?.closingDay ?? null);
   const [error,              setError]              = useState('');
 
-  // Ao escolher um template, preenche os campos automaticamente
   const applyTemplate = (template) => {
     setType(template.type);
     setColor(template.color);
-    if (!name) setName(template.label); // só preenche se o nome estiver vazio
+    if (!name) setName(template.label);
   };
 
   const handleSave = () => {
@@ -83,9 +119,16 @@ const SourceModal = ({ source, onClose, onSave }) => {
       isDefault,
       includeInProjection,
       monthlyLimit:       !isNaN(limit) && limit > 0 ? limit : null,
+      // closingDay só faz sentido para cartão de crédito,
+      // mas deixamos salvar para qualquer tipo caso o usuário queira
+      closingDay:         closingDay || null,
     });
     onClose();
   };
+
+  // Preview do ciclo atual com base no closingDay escolhido
+  const cyclePreview = closingDay ? formatBillingCycle(getBillingCycle(closingDay)) : null;
+  const daysLeft     = closingDay ? daysUntilClosing(closingDay) : null;
 
   return (
     <motion.div
@@ -220,7 +263,6 @@ const SourceModal = ({ source, onClose, onSave }) => {
               </button>
             </div>
 
-            {/* Nome do titular quando for terceiro */}
             <AnimatePresence>
               {owner === 'third_party' && (
                 <motion.div
@@ -258,10 +300,55 @@ const SourceModal = ({ source, onClose, onSave }) => {
             </div>
           </div>
 
-          {/* Limite mensal — opcional */}
+          {/* ── Dia de fechamento ─────────────────────────────────────────── */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Dia de fechamento da fatura{' '}
+                <span className="normal-case font-normal">(opcional)</span>
+              </label>
+            </div>
+
+            <ClosingDayPicker value={closingDay} onChange={setClosingDay} />
+
+            {/* Preview do ciclo ativo */}
+            <AnimatePresence>
+              {cyclePreview && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-primary/5 border border-primary/20 mt-1">
+                    <div>
+                      <p className="text-[10px] text-muted-foreground">Fatura atual</p>
+                      <p className="text-xs font-semibold text-primary font-mono">{cyclePreview}</p>
+                    </div>
+                    {daysLeft !== null && (
+                      <div className="text-right">
+                        <p className="text-[10px] text-muted-foreground">Fecha em</p>
+                        <p className={`text-xs font-bold ${daysLeft <= 3 ? 'text-amber-400' : 'text-foreground'}`}>
+                          {daysLeft === 0 ? 'hoje' : `${daysLeft} dia${daysLeft > 1 ? 's' : ''}`}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <p className="text-[10px] text-muted-foreground leading-relaxed">
+              Define o ciclo da fatura. O limite e os gastos serão contados do dia seguinte ao fechamento até o próximo fechamento.
+            </p>
+          </div>
+
+          {/* Limite da fatura — label muda se tiver closingDay */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Limite mensal <span className="normal-case font-normal">(opcional)</span>
+              {closingDay ? 'Limite da fatura' : 'Limite mensal'}{' '}
+              <span className="normal-case font-normal">(opcional)</span>
             </label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-mono text-muted-foreground">
@@ -336,9 +423,15 @@ const SourceModal = ({ source, onClose, onSave }) => {
 // ─── Card de uma fonte ────────────────────────────────────────────────────────
 
 const SourceCard = ({ source, spent, onEdit, onRemove, formatCurrency }) => {
-  const hasLimit   = source.monthlyLimit && source.monthlyLimit > 0;
-  const pct        = hasLimit ? Math.min((spent / source.monthlyLimit) * 100, 100) : null;
-  const barColor   = pct >= 100 ? 'bg-rose-400' : pct >= 80 ? 'bg-amber-400' : 'bg-emerald-400';
+  const hasLimit  = source.monthlyLimit && source.monthlyLimit > 0;
+  const pct       = hasLimit ? Math.min((spent / source.monthlyLimit) * 100, 100) : null;
+  const barColor  = pct >= 100 ? 'bg-rose-400' : pct >= 80 ? 'bg-amber-400' : 'bg-emerald-400';
+
+  // Ciclo de fatura (só para fontes com closingDay)
+  const cycle        = source.closingDay ? getBillingCycle(source.closingDay) : null;
+  const cycleLabel   = cycle ? formatBillingCycle(cycle) : null;
+  const daysLeft     = source.closingDay ? daysUntilClosing(source.closingDay) : null;
+  const closingSoon  = daysLeft !== null && daysLeft <= 3;
 
   return (
     <div className="flex items-start gap-3 p-3.5 rounded-xl bg-muted/30 border border-border/60">
@@ -366,12 +459,37 @@ const SourceCard = ({ source, spent, onEdit, onRemove, formatCurrency }) => {
           )}
         </div>
 
+        {/* Linha de status: análises + limite ou ciclo */}
         <p className="text-[10px] text-muted-foreground mt-0.5">
           {source.includeInProjection ? 'Incluída nas análises' : 'Excluída das análises'}
-          {hasLimit && ` · Limite: ${formatCurrency(source.monthlyLimit)}`}
+          {hasLimit && !cycleLabel && ` · Limite: ${formatCurrency(source.monthlyLimit)}`}
         </p>
 
-        {/* Mini barra de progresso quando tem limite */}
+        {/* Ciclo de fatura */}
+        {cycleLabel && (
+          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+            <CalendarClock className="h-3 w-3 text-muted-foreground shrink-0" />
+            <span className="text-[10px] font-mono text-muted-foreground">
+              Fatura: <span className="text-foreground font-semibold">{cycleLabel}</span>
+            </span>
+            {closingSoon && (
+              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                daysLeft === 0
+                  ? 'bg-rose-500/15 text-rose-400'
+                  : 'bg-amber-500/15 text-amber-400'
+              }`}>
+                {daysLeft === 0 ? 'fecha hoje' : `fecha em ${daysLeft}d`}
+              </span>
+            )}
+            {hasLimit && (
+              <span className="text-[10px] text-muted-foreground">
+                · limite {formatCurrency(source.monthlyLimit)}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Barra de progresso quando tem limite */}
         {hasLimit && (
           <div className="mt-2 space-y-0.5">
             <div className="h-1.5 rounded-full bg-muted overflow-hidden">
@@ -382,6 +500,7 @@ const SourceCard = ({ source, spent, onEdit, onRemove, formatCurrency }) => {
             </div>
             <p className="text-[9px] text-muted-foreground">
               {formatCurrency(spent)} de {formatCurrency(source.monthlyLimit)} ({Math.round(pct)}%)
+              {cycleLabel && <span className="text-[9px]"> · nesta fatura</span>}
             </p>
           </div>
         )}
@@ -423,7 +542,7 @@ export const PaymentSourcesPage = () => {
   const navigate = useNavigate();
 
   const [showModal, setShowModal]   = useState(false);
-  const [editSource, setEditSource] = useState(null); 
+  const [editSource, setEditSource] = useState(null);
 
   const handleSave = (sourceData) => {
     if (editSource) {
@@ -537,6 +656,7 @@ export const PaymentSourcesPage = () => {
               <li>• Ao registrar um gasto, escolha qual fonte foi utilizada</li>
               <li>• Fontes de terceiros (ex: cartão do pai) podem ser excluídas das suas análises</li>
               <li>• Com limite definido, você recebe alertas ao atingir 80% e 100%</li>
+              <li>• Cartões com dia de fechamento têm o limite reiniciado a cada fatura</li>
               <li>• Os relatórios exportados incluem o detalhamento por fonte</li>
             </ul>
           </div>

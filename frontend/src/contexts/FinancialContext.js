@@ -35,6 +35,81 @@ export const PAYMENT_SOURCE_TEMPLATES = [
 const LIMIT_ALERT_THRESHOLDS = [0.8, 1.0];
 const LOAD_TIMEOUT_MS = 10000;
 
+// ─── Helper: calcula o ciclo de fatura ativo para uma fonte com closingDay ───
+//
+// Regra:
+//   Se hoje é DEPOIS do dia de fechamento → ciclo = (fechamento+1 do mês anterior) até (fechamento do mês atual)
+//   Se hoje é NO dia de fechamento ou ANTES → ciclo = (fechamento+1 de dois meses atrás) até (fechamento do mês anterior)
+//
+// Exemplo — fecha dia 15:
+//   Hoje = 20/mai → ciclo = 16/abr → 15/mai
+//   Hoje = 10/mai → ciclo = 16/mar → 15/abr
+//
+export const getBillingCycle = (closingDay) => {
+  if (!closingDay || closingDay < 1 || closingDay > 28) return null;
+
+  const today    = new Date();
+  const todayDay = today.getDate();
+
+  let cycleEndYear, cycleEndMonth, cycleEndDay;
+  let cycleStartYear, cycleStartMonth, cycleStartDay;
+
+  if (todayDay > closingDay) {
+    // Ciclo encerra no fechamento DESTE mês
+    cycleEndYear  = today.getFullYear();
+    cycleEndMonth = today.getMonth(); // 0-indexed
+    cycleEndDay   = closingDay;
+  } else {
+    // Ainda não chegou no fechamento — ciclo encerrou no mês passado
+    const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    cycleEndYear    = lastMonth.getFullYear();
+    cycleEndMonth   = lastMonth.getMonth();
+    cycleEndDay     = closingDay;
+  }
+
+  // Início = dia seguinte ao fechamento do mês anterior ao fim
+  const startBase  = new Date(cycleEndYear, cycleEndMonth - 1, 1);
+  cycleStartYear   = startBase.getFullYear();
+  cycleStartMonth  = startBase.getMonth();
+  cycleStartDay    = closingDay + 1;
+
+  const pad = (n) => String(n).padStart(2, '0');
+
+  const from = `${cycleStartYear}-${pad(cycleStartMonth + 1)}-${pad(cycleStartDay)}`;
+  const to   = `${cycleEndYear}-${pad(cycleEndMonth + 1)}-${pad(cycleEndDay)}`;
+
+  return { from, to, closingDay };
+};
+
+// ─── Helper: formata o ciclo em texto legível (ex: "16/abr → 15/mai") ────────
+
+export const formatBillingCycle = (cycle) => {
+  if (!cycle) return null;
+  const fmtPart = (dateStr) => {
+    const [, m, d] = dateStr.split('-');
+    const months   = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+    return `${parseInt(d)}/${months[parseInt(m) - 1]}`;
+  };
+  return `${fmtPart(cycle.from)} → ${fmtPart(cycle.to)}`;
+};
+
+// ─── Helper: dias até o fechamento da fatura ─────────────────────────────────
+
+export const daysUntilClosing = (closingDay) => {
+  if (!closingDay) return null;
+  const today    = new Date();
+  const todayDay = today.getDate();
+
+  if (todayDay <= closingDay) {
+    return closingDay - todayDay;
+  } else {
+    // próximo fechamento é no mês seguinte
+    const nextClose  = new Date(today.getFullYear(), today.getMonth() + 1, closingDay);
+    const diffMs     = nextClose - today;
+    return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  }
+};
+
 export const FinancialProvider = ({ children }) => {
   const { user } = useAuth();
   const uid = user?.uid;
@@ -56,7 +131,6 @@ export const FinancialProvider = ({ children }) => {
   // ─── Carrega dados do Firestore ───────────────────────────────────────────
   const loadData = useCallback(async () => {
     if (!uid) return;
-    // só reseta isLoaded se ainda não carregou nada
     if (!isLoaded) setIsLoaded(false);
     isInitialLoadRef.current = true;
 
@@ -103,7 +177,6 @@ export const FinancialProvider = ({ children }) => {
     }
   }, [uid, isLoaded]);
 
-  // Dispara o carregamento quando uid muda
   useEffect(() => {
     if (!uid) {
       setIsLoaded(false);
@@ -113,13 +186,12 @@ export const FinancialProvider = ({ children }) => {
     loadData();
   }, [uid, loadData]);
 
-
   // ─── Sincronização de tema ────────────────────────────────────────────────
 
   useEffect(() => {
     if (!isLoaded || !uid) return;
     setSettings(prev => {
-      if (prev.theme === theme) return prev; 
+      if (prev.theme === theme) return prev;
       return { ...prev, theme };
     });
   }, [theme, isLoaded, uid]);
@@ -129,7 +201,6 @@ export const FinancialProvider = ({ children }) => {
     setTheme(settings.theme);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded, settings.theme]);
-
 
   useEffect(() => {
     if (isLoaded && uid && !isInitialLoadRef.current)
@@ -314,6 +385,8 @@ export const FinancialProvider = ({ children }) => {
     setTransactions(prev => prev.filter(t => t.id !== id));
   }, []);
 
+  // currentMonthTransactions continua no mês calendário —
+  // usado para o termômetro geral, projeção e categoria breakdown
   const currentMonthTransactions = useMemo(() => {
     const currentMonth = new Date().toISOString().slice(0, 7);
     return transactions.filter(t => t.date?.startsWith(currentMonth));
@@ -356,35 +429,99 @@ export const FinancialProvider = ({ children }) => {
     return paymentSources.find(s => s.isDefault) || paymentSources[0] || null;
   }, [paymentSources]);
 
+  // ─── spentBySource — respeita ciclo de fatura quando closingDay existe ────
+  //
+  // Para fontes COM closingDay: filtra transações dentro do ciclo ativo
+  // Para fontes SEM closingDay: usa o mês calendário (comportamento original)
+  //
   const spentBySourceThisMonth = useMemo(() => {
+    const currentMonth = new Date().toISOString().slice(0, 7);
     const map = new Map();
-    currentMonthTransactions.forEach(t => {
-      const key = t.sourceId || null;
-      map.set(key, (map.get(key) || 0) + (t.amount || 0));
+
+    // Pré-calcula o ciclo de cada fonte para não recalcular por transação
+    const sourceCycleMap = new Map();
+    paymentSources.forEach(source => {
+      if (source.closingDay) {
+        sourceCycleMap.set(source.id, getBillingCycle(source.closingDay));
+      }
+    });
+
+    transactions.forEach(t => {
+      const key    = t.sourceId || null;
+      const cycle  = key ? sourceCycleMap.get(key) : null;
+
+      let inPeriod;
+      if (cycle) {
+        // Fonte com ciclo de fatura: verifica se a data está dentro do ciclo
+        inPeriod = t.date >= cycle.from && t.date <= cycle.to;
+      } else {
+        // Sem closingDay: usa mês calendário como antes
+        inPeriod = t.date?.startsWith(currentMonth);
+      }
+
+      if (inPeriod) {
+        map.set(key, (map.get(key) || 0) + (t.amount || 0));
+      }
+    });
+
+    return map;
+  }, [transactions, paymentSources]);
+
+  // ─── billingCycleBySource — expõe o ciclo calculado para a UI ─────────────
+
+  const billingCycleBySource = useMemo(() => {
+    const map = new Map();
+    paymentSources.forEach(source => {
+      if (source.closingDay) {
+        map.set(source.id, getBillingCycle(source.closingDay));
+      }
     });
     return map;
-  }, [currentMonthTransactions]);
+  }, [paymentSources]);
+
+  // ─── Alertas de limite + fechamento próximo ───────────────────────────────
 
   const sourceLimitAlerts = useMemo(() => {
     const result = [];
     paymentSources.forEach(source => {
-      if (!source.monthlyLimit || source.monthlyLimit <= 0) return;
       const spent = spentBySourceThisMonth.get(source.id) || 0;
-      const ratio = spent / source.monthlyLimit;
-      LIMIT_ALERT_THRESHOLDS.forEach(threshold => {
-        if (ratio >= threshold) {
+
+      // Alertas de limite (80% e 100%)
+      if (source.monthlyLimit && source.monthlyLimit > 0) {
+        const ratio = spent / source.monthlyLimit;
+        LIMIT_ALERT_THRESHOLDS.forEach(threshold => {
+          if (ratio >= threshold) {
+            result.push({
+              id:         `source-limit-${source.id}-${threshold}`,
+              sourceId:   source.id,
+              sourceName: source.name,
+              threshold,
+              spent,
+              limit:      source.monthlyLimit,
+              ratio,
+              level:      threshold >= 1.0 ? 'danger' : 'warning',
+              type:       'limit',
+            });
+          }
+        });
+      }
+
+      // Alerta de fechamento próximo (≤ 3 dias)
+      if (source.closingDay) {
+        const days = daysUntilClosing(source.closingDay);
+        if (days !== null && days <= 3) {
           result.push({
-            id:         `source-limit-${source.id}-${threshold}`,
+            id:         `source-closing-${source.id}`,
             sourceId:   source.id,
             sourceName: source.name,
-            threshold,
+            daysLeft:   days,
             spent,
-            limit:      source.monthlyLimit,
-            ratio,
-            level:      threshold >= 1.0 ? 'danger' : 'warning',
+            limit:      source.monthlyLimit || null,
+            level:      days === 0 ? 'danger' : 'warning',
+            type:       'closing',
           });
         }
-      });
+      }
     });
     return result;
   }, [paymentSources, spentBySourceThisMonth]);
@@ -402,7 +539,7 @@ export const FinancialProvider = ({ children }) => {
 
   const resetAll = useCallback(async () => {
     await storageService.clearAll(uid);
-    isInitialLoadRef.current = true; // ← antes do setIsLoaded
+    isInitialLoadRef.current = true;
     setSettings(storageService.getDefaultSettings());
     setFinancialData(storageService.getDefaultFinancialData());
     setScenarios([]);
@@ -519,8 +656,8 @@ export const FinancialProvider = ({ children }) => {
     theme,
     toggleTheme,
     isDark,
-    mounted: isLoaded,  
-    isLoaded,       
+    mounted: isLoaded,
+    isLoaded,
     themeMounted,
 
     financialData,
@@ -555,6 +692,7 @@ export const FinancialProvider = ({ children }) => {
     removePaymentSource,
     defaultPaymentSource,
     spentBySourceThisMonth,
+    billingCycleBySource,   // ← novo: ciclo ativo por fonte
     sourceLimitAlerts,
     totalOwnSourcesThisMonth,
     projection,
