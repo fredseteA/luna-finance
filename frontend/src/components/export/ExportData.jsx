@@ -1,19 +1,20 @@
-import React, { useState } from 'react';
-import { Download, FileText, FileSpreadsheet, Loader2 } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import {
+  Download, FileText, FileSpreadsheet, Loader2,
+  SlidersHorizontal, ChevronDown, ChevronUp,
+  CheckSquare, Square, Calendar, Tag, CreditCard, LayoutList,
+} from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../ui/select';
 import { useFinancial } from '../../contexts/FinancialContext';
 import { formatCurrency, formatPercentage, CURRENCIES } from '../../services/financialEngine';
 import { toast } from 'sonner';
+import { cn } from '../../lib/utils';
 
-// ─── Helpers locais ───────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const fmtDate = (dateStr) => {
   if (!dateStr) return '-';
@@ -32,126 +33,200 @@ const CATEGORY_LABELS = {
   outros:      'Outros',
 };
 
-// ─── Componente ───────────────────────────────────────────────────────────────
+const ALL_CATEGORIES = Object.keys(CATEGORY_LABELS);
+
+const today      = () => new Date().toISOString().slice(0, 10);
+const monthStart = () => { const d = new Date(); d.setDate(1); return d.toISOString().slice(0, 10); };
+const nMonthsAgo = (n) => {
+  const d = new Date();
+  d.setMonth(d.getMonth() - n);
+  d.setDate(1);
+  return d.toISOString().slice(0, 10);
+};
+
+const PERIOD_PRESETS = [
+  { label: 'Mês atual',      value: 'current_month' },
+  { label: 'Últimos 3 meses', value: '3m' },
+  { label: 'Últimos 6 meses', value: '6m' },
+  { label: 'Último ano',     value: '12m' },
+  { label: 'Tudo',           value: 'all' },
+  { label: 'Personalizado',  value: 'custom' },
+];
+
+const resolvePeriod = (preset, customFrom, customTo) => {
+  switch (preset) {
+    case 'current_month': return { from: monthStart(), to: today() };
+    case '3m':            return { from: nMonthsAgo(3), to: today() };
+    case '6m':            return { from: nMonthsAgo(6), to: today() };
+    case '12m':           return { from: nMonthsAgo(12), to: today() };
+    case 'custom':        return { from: customFrom, to: customTo };
+    default:              return { from: null, to: null }; // all
+  }
+};
+
+// ─── Sub-componentes de filtro ────────────────────────────────────────────────
+
+const SectionToggle = ({ icon: Icon, label, checked, onChange }) => (
+  <button
+    onClick={() => onChange(!checked)}
+    className={cn(
+      'flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all',
+      checked
+        ? 'bg-primary/10 border-primary/40 text-primary'
+        : 'bg-muted/40 border-border/40 text-muted-foreground hover:text-foreground'
+    )}
+  >
+    <Icon className="h-3.5 w-3.5" />
+    {label}
+  </button>
+);
+
+const CheckItem = ({ label, checked, onChange, color }) => (
+  <button
+    onClick={() => onChange(!checked)}
+    className="flex items-center gap-2 text-xs text-left transition-colors hover:text-foreground text-muted-foreground"
+  >
+    {checked
+      ? <CheckSquare className="h-3.5 w-3.5 text-primary shrink-0" />
+      : <Square       className="h-3.5 w-3.5 shrink-0" />
+    }
+    {color && <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color }} />}
+    <span className={checked ? 'text-foreground' : ''}>{label}</span>
+  </button>
+);
+
+// ─── ExportData ───────────────────────────────────────────────────────────────
 
 export const ExportData = () => {
   const {
-    projection,
-    financialData,
-    settings,
-    currency,
-    summary,
-    scoreBreakdown,
-    transactions,
-    currentMonthTransactions,
-    paymentSources,
-    spentBySourceThisMonth,
+    projection, financialData, settings, currency, summary,
+    scoreBreakdown, transactions, currentMonthTransactions,
+    paymentSources, spentBySourceThisMonth,
   } = useFinancial();
 
   const [exportFormat, setExportFormat] = useState('csv');
   const [isExporting,  setIsExporting]  = useState(false);
+  const [filtersOpen,  setFiltersOpen]  = useState(false);
+
+  // ── Filtros de período ──────────────────────────────────────────────────────
+  const [periodPreset, setPeriodPreset] = useState('all');
+  const [customFrom,   setCustomFrom]   = useState(monthStart());
+  const [customTo,     setCustomTo]     = useState(today());
+
+  // ── Seções a incluir ────────────────────────────────────────────────────────
+  const [sections, setSections] = useState({
+    projection:   true,
+    transactions: true,
+    sources:      true,
+    summary:      true,
+  });
+
+  // ── Categorias selecionadas ─────────────────────────────────────────────────
+  const [selectedCategories, setSelectedCategories] = useState(new Set(ALL_CATEGORIES));
+
+  // ── Fontes selecionadas ─────────────────────────────────────────────────────
+  const [selectedSources, setSelectedSources] = useState(
+    () => new Set(paymentSources.map(s => s.id).concat(['__none__']))
+  );
+
+  // ── Computed: transações filtradas ─────────────────────────────────────────
+  const { from, to } = resolvePeriod(periodPreset, customFrom, customTo);
+
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter(t => {
+      if (from && t.date < from) return false;
+      if (to   && t.date > to)   return false;
+      const cat = t.category || 'outros';
+      if (!selectedCategories.has(cat)) return false;
+      const sid = t.sourceId || '__none__';
+      if (!selectedSources.has(sid)) return false;
+      return true;
+    });
+  }, [transactions, from, to, selectedCategories, selectedSources]);
 
   const currencySymbol = CURRENCIES[currency]?.symbol || 'R$';
 
-  // ─── CSV ────────────────────────────────────────────────────────────────────
+  // ── Helpers de toggle ──────────────────────────────────────────────────────
+
+  const toggleSection = (key) =>
+    setSections(prev => ({ ...prev, [key]: !prev[key] }));
+
+  const toggleCategory = (id, val) =>
+    setSelectedCategories(prev => {
+      const next = new Set(prev);
+      val ? next.add(id) : next.delete(id);
+      return next;
+    });
+
+  const toggleSource = (id, val) =>
+    setSelectedSources(prev => {
+      const next = new Set(prev);
+      val ? next.add(id) : next.delete(id);
+      return next;
+    });
+
+  const selectAllCategories = () => setSelectedCategories(new Set(ALL_CATEGORIES));
+  const clearAllCategories  = () => setSelectedCategories(new Set());
+  const selectAllSources    = () => setSelectedSources(new Set(paymentSources.map(s => s.id).concat(['__none__'])));
+  const clearAllSources     = () => setSelectedSources(new Set());
+  const selectAll           = () => setSections({ projection: true, transactions: true, sources: true, summary: true });
+
+  // ── CSV ────────────────────────────────────────────────────────────────────
 
   const generateCSV = () => {
-    const sections = [];
+    const csvSections = [];
 
-    // ── 1. Projeção mensal ──────────────────────────────────────────────────
-    if (projection.length > 0) {
-      const projHeaders = [
-        'Mês',
-        'Data',
-        `Receita (${currencySymbol})`,
-        `Custos Fixos (${currencySymbol})`,
-        `Gastos Variáveis (${currencySymbol})`,
-        `Sobra (${currencySymbol})`,
-        `Rendimentos Brutos (${currencySymbol})`,
-        `Rendimentos Líquidos (${currencySymbol})`,
-        `Patrimônio Nominal (${currencySymbol})`,
+    if (sections.projection && projection.length > 0) {
+      const headers = [
+        'Mês', 'Data',
+        `Receita (${currencySymbol})`, `Custos Fixos (${currencySymbol})`,
+        `Gastos Variáveis (${currencySymbol})`, `Sobra (${currencySymbol})`,
+        `Rendimentos Líquidos (${currencySymbol})`, `Patrimônio Nominal (${currencySymbol})`,
         `Patrimônio Real (${currencySymbol})`,
-        `CDI (${currencySymbol})`,
-        `Selic (${currencySymbol})`,
-        `CDB (${currencySymbol})`,
-        `FII (${currencySymbol})`,
       ];
-
-      const projRows = projection.map(month => [
-        month.month,
-        month.monthLabel,
-        month.income.toFixed(2),
-        month.fixedCosts.toFixed(2),
-        month.variableExpenses.toFixed(2),
-        month.surplus.toFixed(2),
-        (month.grossReturns
-          ? Object.values(month.grossReturns).reduce((a, b) => a + b, 0)
-          : month.investmentReturns
-        ).toFixed(2),
-        month.investmentReturns.toFixed(2),
-        month.patrimony.toFixed(2),
-        (month.patrimonyReal || month.patrimony).toFixed(2),
-        month.breakdown.cdi.toFixed(2),
-        month.breakdown.selic.toFixed(2),
-        month.breakdown.cdb.toFixed(2),
-        month.breakdown.fii.toFixed(2),
+      const rows = projection.map(m => [
+        m.month, m.monthLabel,
+        m.income.toFixed(2), m.fixedCosts.toFixed(2),
+        m.variableExpenses.toFixed(2), m.surplus.toFixed(2),
+        m.investmentReturns.toFixed(2), m.patrimony.toFixed(2),
+        (m.patrimonyReal || m.patrimony).toFixed(2),
       ]);
-
-      sections.push(
-        'PROJEÇÃO MENSAL',
-        projHeaders.join(','),
-        ...projRows.map(r => r.join(',')),
-      );
+      csvSections.push('PROJEÇÃO MENSAL', headers.join(','), ...rows.map(r => r.join(',')));
     }
 
-    // ── 2. Fontes de pagamento ──────────────────────────────────────────────
-    if (paymentSources.length > 0) {
-      const sourceHeaders = [
-        'Nome',
-        'Tipo',
-        'Titular',
-        'Nome do titular',
-        'Inclui nas análises',
-        `Limite mensal (${currencySymbol})`,
-        `Gasto no mês atual (${currencySymbol})`,
+    if (sections.sources && paymentSources.length > 0) {
+      const headers = [
+        'Nome', 'Tipo', 'Titular', 'Nome do titular',
+        'Inclui análises', `Limite/mês (${currencySymbol})`, `Gasto atual (${currencySymbol})`,
       ];
-
-      const sourceRows = paymentSources.map(s => [
-        `"${s.name}"`,
-        s.type,
+      const rows = paymentSources.map(s => [
+        `"${s.name}"`, s.type,
         s.owner === 'self' ? 'Própria' : 'Terceiro',
         s.owner === 'third_party' ? `"${s.ownerName || ''}"` : '-',
         s.includeInProjection ? 'Sim' : 'Não',
         s.monthlyLimit ? s.monthlyLimit.toFixed(2) : '-',
         (spentBySourceThisMonth.get(s.id) || 0).toFixed(2),
       ]);
-
-      sections.push(
-        '',
-        'FONTES DE PAGAMENTO',
-        sourceHeaders.join(','),
-        ...sourceRows.map(r => r.join(',')),
-      );
+      csvSections.push('', 'FONTES DE PAGAMENTO', headers.join(','), ...rows.map(r => r.join(',')));
     }
 
-    // ── 3. Lançamentos (transactions) ───────────────────────────────────────
-    if (transactions.length > 0) {
-      const txHeaders = [
-        'Data',
-        'Descrição',
-        'Categoria',
-        `Valor (${currencySymbol})`,
-        'Fonte de pagamento',
-        'Titular da fonte',
-        'Incluído nas análises',
+    if (sections.transactions && filteredTransactions.length > 0) {
+      // Adiciona metadado de filtro no topo
+      const filterInfo = [
+        `# Filtros aplicados:`,
+        `# Período: ${from ? `${fmtDate(from)} a ${fmtDate(to)}` : 'Todos'}`,
+        `# Categorias: ${selectedCategories.size === ALL_CATEGORIES.length ? 'Todas' : [...selectedCategories].map(c => CATEGORY_LABELS[c] || c).join(', ')}`,
+        `# Fontes: ${selectedSources.size === paymentSources.length + 1 ? 'Todas' : [...selectedSources].map(id => id === '__none__' ? 'Sem fonte' : (paymentSources.find(s => s.id === id)?.name || id)).join(', ')}`,
       ];
 
-      // Ordena do mais recente para o mais antigo
-      const sorted = [...transactions].sort((a, b) =>
-        (b.date || b.createdAt || '').localeCompare(a.date || a.createdAt || '')
+      const headers = [
+        'Data', 'Descrição', 'Categoria',
+        `Valor (${currencySymbol})`, 'Fonte', 'Titular', 'Inclui análises',
+      ];
+      const sorted = [...filteredTransactions].sort((a, b) =>
+        (b.date || '').localeCompare(a.date || '')
       );
-
-      const txRows = sorted.map(t => {
+      const rows = sorted.map(t => {
         const source = paymentSources.find(s => s.id === t.sourceId);
         return [
           fmtDate(t.date),
@@ -164,251 +239,147 @@ export const ExportData = () => {
         ];
       });
 
-      sections.push(
-        '',
-        'LANÇAMENTOS DO PERÍODO',
-        txHeaders.join(','),
-        ...txRows.map(r => r.join(',')),
+      const total = filteredTransactions.reduce((s, t) => s + (t.amount || 0), 0);
+      csvSections.push(
+        '', 'LANÇAMENTOS',
+        ...filterInfo,
+        `# Total filtrado: ${total.toFixed(2)} (${filteredTransactions.length} lançamentos)`,
+        headers.join(','),
+        ...rows.map(r => r.join(',')),
       );
-
-      // ── Resumo por fonte ──────────────────────────────────────────────────
-      if (paymentSources.length > 0) {
-        const resumoHeaders = [`Fonte (${currencySymbol})`, 'Total gasto', 'Qtd. lançamentos'];
-        const resumoRows = paymentSources.map(s => {
-          const sourceTxs = transactions.filter(t => t.sourceId === s.id);
-          const total     = sourceTxs.reduce((sum, t) => sum + (t.amount || 0), 0);
-          return [`"${s.name}"`, total.toFixed(2), sourceTxs.length];
-        });
-
-        // Sem fonte
-        const noSourceTxs = transactions.filter(t => !t.sourceId);
-        if (noSourceTxs.length > 0) {
-          resumoRows.push([
-            'Sem fonte',
-            noSourceTxs.reduce((sum, t) => sum + (t.amount || 0), 0).toFixed(2),
-            noSourceTxs.length,
-          ]);
-        }
-
-        sections.push(
-          '',
-          'RESUMO POR FONTE',
-          resumoHeaders.join(','),
-          ...resumoRows.map(r => r.join(',')),
-        );
-      }
     }
 
-    return sections.join('\n');
+    if (sections.summary && filteredTransactions.length > 0 && paymentSources.length > 0) {
+      const headers = [`Fonte (${currencySymbol})`, 'Total gasto', 'Qtd. lançamentos'];
+      const resumoRows = paymentSources.map(s => {
+        const txs   = filteredTransactions.filter(t => t.sourceId === s.id);
+        const total = txs.reduce((sum, t) => sum + (t.amount || 0), 0);
+        return [`"${s.name}"`, total.toFixed(2), txs.length];
+      });
+      const noSource = filteredTransactions.filter(t => !t.sourceId);
+      if (noSource.length > 0) {
+        resumoRows.push(['Sem fonte', noSource.reduce((s, t) => s + (t.amount || 0), 0).toFixed(2), noSource.length]);
+      }
+      csvSections.push('', 'RESUMO POR FONTE', headers.join(','), ...resumoRows.map(r => r.join(',')));
+    }
+
+    return csvSections.join('\n');
   };
 
-  // ─── PDF ────────────────────────────────────────────────────────────────────
+  // ── PDF ────────────────────────────────────────────────────────────────────
 
   const generatePDF = async () => {
-    if (projection.length === 0 && transactions.length === 0) return null;
-
-    const { jsPDF }            = await import('jspdf');
+    const { jsPDF }              = await import('jspdf');
     const { default: autoTable } = await import('jspdf-autotable');
 
     const doc        = new jsPDF();
     const pageWidth  = doc.internal.pageSize.width;
     const pageHeight = doc.internal.pageSize.height;
 
-    // ── Capa ────────────────────────────────────────────────────────────────
+    // Capa
     doc.setFillColor(9, 10, 11);
     doc.rect(0, 0, pageWidth, 100, 'F');
-
-    doc.setFontSize(28);
-    doc.setTextColor(52, 211, 153);
-    doc.text('Planejador Financeiro', pageWidth / 2, 45, { align: 'center' });
-
-    doc.setFontSize(14);
-    doc.setTextColor(200, 200, 200);
-    doc.text('Relatório de Projeção Financeira', pageWidth / 2, 58, { align: 'center' });
-
-    doc.setFontSize(10);
-    doc.setTextColor(150, 150, 150);
+    doc.setFontSize(26); doc.setTextColor(52, 211, 153);
+    doc.text('Planejador Financeiro', pageWidth / 2, 42, { align: 'center' });
+    doc.setFontSize(13); doc.setTextColor(200, 200, 200);
+    doc.text('Relatório de Projeção Financeira', pageWidth / 2, 55, { align: 'center' });
+    doc.setFontSize(9); doc.setTextColor(150, 150, 150);
     doc.text(
       `Gerado em ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`,
-      pageWidth / 2, 75, { align: 'center' }
+      pageWidth / 2, 70, { align: 'center' }
     );
+    if (from) {
+      doc.text(
+        `Período: ${fmtDate(from)} a ${fmtDate(to)}`,
+        pageWidth / 2, 80, { align: 'center' }
+      );
+    }
 
     // Resumo executivo
     doc.setFillColor(18, 20, 23);
-    doc.roundedRect(20, 115, pageWidth - 40, 80, 5, 5, 'F');
-
-    doc.setFontSize(12);
-    doc.setTextColor(52, 211, 153);
-    doc.text('RESUMO EXECUTIVO', 30, 130);
-
-    doc.setFontSize(10);
-    const summaryItems = [
-      ['Patrimônio Atual:',    formatCurrency(summary.currentPatrimony, currency)],
+    doc.roundedRect(20, 112, pageWidth - 40, 80, 5, 5, 'F');
+    doc.setFontSize(11); doc.setTextColor(52, 211, 153);
+    doc.text('RESUMO EXECUTIVO', 30, 128);
+    const items = [
+      ['Patrimônio Atual:',     formatCurrency(summary.currentPatrimony, currency)],
       ['Patrimônio Projetado:', formatCurrency(summary.projectedPatrimony, currency)],
-      ['Crescimento Total:',   `${formatCurrency(summary.totalGrowth, currency)} (${formatPercentage(summary.totalGrowthPercentage)})`],
-      ['Sobra Mensal:',        formatCurrency(summary.monthlySurplus, currency)],
-      ['Taxa de Poupança:',    formatPercentage(summary.savingsRate)],
-      ['Score Financeiro:',    `${scoreBreakdown?.totalScore || 0}/100 (${scoreBreakdown?.grade || 'N/A'})`],
+      ['Crescimento Total:',    `${formatCurrency(summary.totalGrowth, currency)} (${formatPercentage(summary.totalGrowthPercentage)})`],
+      ['Sobra Mensal:',         formatCurrency(summary.monthlySurplus, currency)],
+      ['Taxa de Poupança:',     formatPercentage(summary.savingsRate)],
+      ['Score Financeiro:',     `${scoreBreakdown?.totalScore || 0}/100 (${scoreBreakdown?.grade || 'N/A'})`],
     ];
-    summaryItems.forEach(([label, value], idx) => {
-      const y = 145 + idx * 8;
-      doc.setTextColor(150, 150, 150);
-      doc.text(label, 30, y);
-      doc.setTextColor(255, 255, 255);
-      doc.text(value, 100, y);
+    items.forEach(([label, value], i) => {
+      const y = 142 + i * 8;
+      doc.setFontSize(9); doc.setTextColor(150, 150, 150); doc.text(label, 30, y);
+      doc.setTextColor(255, 255, 255); doc.text(value, 100, y);
     });
 
-    // Período
-    doc.setFillColor(18, 20, 23);
-    doc.roundedRect(20, 205, pageWidth - 40, 30, 5, 5, 'F');
-    doc.setFontSize(10);
-    doc.setTextColor(150, 150, 150);
-    doc.text('Período de Análise:', 30, 220);
-    doc.setTextColor(255, 255, 255);
-    doc.text(
-      `${financialData.durationMonths} meses (${(financialData.durationMonths / 12).toFixed(1)} anos)`,
-      85, 220
-    );
-    doc.setTextColor(150, 150, 150);
-    doc.text('Início:', 130, 220);
-    doc.setTextColor(255, 255, 255);
-    const startDate = new Date(financialData.startDate);
-    doc.text(startDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }), 145, 220);
-
-    // ── Pág 2: Configuração ──────────────────────────────────────────────────
-    doc.addPage();
-
-    doc.setFontSize(16);
-    doc.setTextColor(52, 211, 153);
-    doc.text('Configuração Financeira', 14, 25);
-
-    doc.setFontSize(12);
-    doc.setTextColor(60, 130, 246);
-    doc.text('Renda e Patrimônio', 14, 40);
-
-    doc.setFontSize(10);
-    doc.setTextColor(60);
-    doc.text(`Renda Mensal: ${formatCurrency(financialData.monthlyIncome, currency)}`, 14, 50);
-    doc.text(`Patrimônio Inicial: ${formatCurrency(financialData.initialPatrimony, currency)}`, 14, 58);
-
-    doc.setFontSize(12);
-    doc.setTextColor(244, 63, 94);
-    doc.text('Despesas', 14, 75);
-
-    const totalFixed    = financialData.fixedCosts?.reduce((sum, c) => sum + (c.amount || 0), 0) || 0;
-    const totalVariable = financialData.variableExpenses?.reduce((sum, e) => sum + (e.amount || 0), 0) || 0;
-
-    doc.setFontSize(10);
-    doc.setTextColor(60);
-    doc.text(`Custos Fixos: ${formatCurrency(totalFixed, currency)}`, 14, 85);
-    doc.text(`Gastos Variáveis: ${formatCurrency(totalVariable, currency)}`, 14, 93);
-    doc.text(`Total Despesas: ${formatCurrency(totalFixed + totalVariable, currency)}`, 14, 101);
-
-    doc.setFontSize(12);
-    doc.setTextColor(52, 211, 153);
-    doc.text('Alocação de Investimentos', 14, 118);
-
-    const allocation = financialData.allocation || { cdi: 25, selic: 25, cdb: 25, fii: 25 };
-    doc.setFontSize(10);
-    doc.setTextColor(60);
-    doc.text(`CDI: ${allocation.cdi}% | Selic: ${allocation.selic}% | CDB: ${allocation.cdb}% | FII: ${allocation.fii}%`, 14, 128);
-
-    doc.setFontSize(12);
-    doc.setTextColor(251, 191, 36);
-    doc.text('Taxas de Mercado', 14, 145);
-
-    const rates = settings.rates;
-    doc.setFontSize(10);
-    doc.setTextColor(60);
-    doc.text(
-      `CDI: ${rates.cdi}% a.a. (${rates.cdiPercentage}%) | Selic: ${rates.selic}% a.a. | CDB: ${rates.cdb}% a.a. | FII: ${rates.fii}% a.m.`,
-      14, 155
-    );
-    doc.text(
-      `Inflação: ${settings.inflation || 0}% a.a. | Impostos: ${settings.taxes?.enabled ? 'Sim' : 'Não'}`,
-      14, 163
-    );
-
-    // ── NOVO: Fontes de pagamento na pág 2 ──────────────────────────────────
-    if (paymentSources.length > 0) {
-      let yPos = 180;
-      doc.setFontSize(12);
-      doc.setTextColor(96, 165, 250);
-      doc.text('Fontes de Pagamento', 14, yPos);
-      yPos += 12;
-
+    // Projeção mensal
+    if (sections.projection && projection.length > 0) {
+      doc.addPage();
+      doc.setFontSize(15); doc.setTextColor(52, 211, 153);
+      doc.text('Projeção Mensal Detalhada', 14, 22);
       autoTable(doc, {
-        startY: yPos,
+        head: [['Mês', 'Receita', 'Despesas', 'Sobra', 'Rendimentos', 'Patrimônio', 'Real*']],
+        body: projection.map(m => [
+          m.monthLabel,
+          formatCurrency(m.income, currency),
+          formatCurrency(m.fixedCosts + m.variableExpenses, currency),
+          formatCurrency(m.surplus, currency),
+          formatCurrency(m.investmentReturns, currency),
+          formatCurrency(m.patrimony, currency),
+          formatCurrency(m.patrimonyReal || m.patrimony, currency),
+        ]),
+        startY: 30,
+        theme: 'striped',
+        headStyles: { fillColor: [52, 211, 153], textColor: 255, fontStyle: 'bold' },
+        styles: { fontSize: 8, cellPadding: 2.5, halign: 'right' },
+        columnStyles: { 0: { halign: 'left', cellWidth: 25 } },
+      });
+      doc.setFontSize(7.5); doc.setTextColor(100);
+      doc.text('* Patrimônio Real = Valor ajustado pela inflação', 14, doc.lastAutoTable.finalY + 8);
+    }
+
+    // Fontes de pagamento
+    if (sections.sources && paymentSources.length > 0) {
+      doc.addPage();
+      doc.setFontSize(15); doc.setTextColor(52, 211, 153);
+      doc.text('Fontes de Pagamento', 14, 22);
+      autoTable(doc, {
         head: [['Nome', 'Tipo', 'Titular', 'Análises', 'Limite/mês', 'Gasto atual']],
         body: paymentSources.map(s => [
-          s.name,
-          s.type,
+          s.name, s.type,
           s.owner === 'self' ? 'Própria' : `Terceiro (${s.ownerName || ''})`,
           s.includeInProjection ? 'Incluída' : 'Excluída',
           s.monthlyLimit ? formatCurrency(s.monthlyLimit, currency) : '-',
           formatCurrency(spentBySourceThisMonth.get(s.id) || 0, currency),
         ]),
+        startY: 30,
         theme: 'striped',
-        headStyles: { fillColor: [60, 130, 246], textColor: 255, fontStyle: 'bold' },
+        headStyles: { fillColor: [96, 165, 250], textColor: 255, fontStyle: 'bold' },
         styles: { fontSize: 8, cellPadding: 3 },
       });
     }
 
-    // ── Pág 3: Projeção mensal ───────────────────────────────────────────────
-    if (projection.length > 0) {
+    // Lançamentos filtrados
+    if (sections.transactions && filteredTransactions.length > 0) {
       doc.addPage();
+      doc.setFontSize(15); doc.setTextColor(52, 211, 153);
+      doc.text('Lançamentos', 14, 22);
 
-      doc.setFontSize(16);
-      doc.setTextColor(52, 211, 153);
-      doc.text('Projeção Mensal Detalhada', 14, 25);
-
-      autoTable(doc, {
-        head: [['Mês', 'Receita', 'Despesas', 'Sobra', 'Rendimentos', 'Patrimônio', 'Real*']],
-        body: projection.map(month => [
-          month.monthLabel,
-          formatCurrency(month.income, currency),
-          formatCurrency(month.fixedCosts + month.variableExpenses, currency),
-          formatCurrency(month.surplus, currency),
-          formatCurrency(month.investmentReturns, currency),
-          formatCurrency(month.patrimony, currency),
-          formatCurrency(month.patrimonyReal || month.patrimony, currency),
-        ]),
-        startY: 35,
-        theme: 'striped',
-        headStyles: { fillColor: [52, 211, 153], textColor: 255, fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: [245, 245, 245] },
-        styles: { fontSize: 8, cellPadding: 3, halign: 'right' },
-        columnStyles: { 0: { halign: 'left', cellWidth: 25 } },
-      });
-
-      doc.setFontSize(8);
-      doc.setTextColor(100);
-      doc.text('* Patrimônio Real = Valor ajustado pela inflação', 14, doc.lastAutoTable.finalY + 10);
-    }
-
-    // ── NOVO: Pág 4 — Lançamentos do período ────────────────────────────────
-    if (transactions.length > 0) {
-      doc.addPage();
-
-      doc.setFontSize(16);
-      doc.setTextColor(52, 211, 153);
-      doc.text('Lançamentos do Período', 14, 25);
-
-      // Total geral
-      const totalGeral = transactions.reduce((sum, t) => sum + (t.amount || 0), 0);
-      doc.setFontSize(10);
-      doc.setTextColor(60);
+      const totalGeral = filteredTransactions.reduce((s, t) => s + (t.amount || 0), 0);
+      doc.setFontSize(8.5); doc.setTextColor(80);
       doc.text(
-        `Total de lançamentos: ${transactions.length}  |  Valor total: ${formatCurrency(totalGeral, currency)}`,
-        14, 38
+        `${filteredTransactions.length} lançamentos  |  Total: ${formatCurrency(totalGeral, currency)}` +
+        (from ? `  |  Período: ${fmtDate(from)} a ${fmtDate(to)}` : ''),
+        14, 32
       );
 
-      const sorted = [...transactions].sort((a, b) =>
-        (b.date || b.createdAt || '').localeCompare(a.date || a.createdAt || '')
+      const sorted = [...filteredTransactions].sort((a, b) =>
+        (b.date || '').localeCompare(a.date || '')
       );
-
       autoTable(doc, {
-        head: [['Data', 'Descrição', 'Categoria', 'Fonte', 'Titular', 'Inclui', `Valor (${currencySymbol})`]],
+        head: [['Data', 'Descrição', 'Categoria', 'Fonte', 'Inclui', `Valor (${currencySymbol})`]],
         body: sorted.map(t => {
           const source = paymentSources.find(s => s.id === t.sourceId);
           return [
@@ -416,184 +387,142 @@ export const ExportData = () => {
             t.description || '-',
             CATEGORY_LABELS[t.category] || t.category || '-',
             source?.name || 'Sem fonte',
-            source?.owner === 'third_party' ? (source?.ownerName || '-') : '-',
             source ? (source.includeInProjection ? 'Sim' : 'Não') : 'Sim',
             (t.amount || 0).toFixed(2),
           ];
         }),
-        startY: 48,
+        startY: 40,
         theme: 'striped',
         headStyles: { fillColor: [52, 211, 153], textColor: 255, fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: [245, 245, 245] },
         styles: { fontSize: 7.5, cellPadding: 2.5 },
-        columnStyles: {
-          0: { cellWidth: 18 },
-          5: { halign: 'center', cellWidth: 14 },
-          6: { halign: 'right', cellWidth: 22 },
-        },
+        columnStyles: { 5: { halign: 'right', cellWidth: 24 } },
       });
+    }
 
-      // ── Resumo por fonte ────────────────────────────────────────────────────
-      const resumoStartY = doc.lastAutoTable.finalY + 12;
-
-      if (pageHeight - resumoStartY > 60) {
-        doc.setFontSize(12);
-        doc.setTextColor(52, 211, 153);
-        doc.text('Resumo por Fonte', 14, resumoStartY);
-
-        const resumoBody = paymentSources
-          .filter(s => transactions.some(t => t.sourceId === s.id))
-          .map(s => {
-            const sourceTxs = transactions.filter(t => t.sourceId === s.id);
-            const total     = sourceTxs.reduce((sum, t) => sum + (t.amount || 0), 0);
-            return [
-              s.name,
-              s.owner === 'self' ? 'Própria' : `Terceiro (${s.ownerName || ''})`,
-              s.includeInProjection ? 'Sim' : 'Não',
-              sourceTxs.length,
-              formatCurrency(total, currency),
-            ];
-          });
-
-        const noSource = transactions.filter(t => !t.sourceId);
-        if (noSource.length > 0) {
-          resumoBody.push([
-            'Sem fonte',
-            '-',
-            'Sim',
-            noSource.length,
-            formatCurrency(noSource.reduce((sum, t) => sum + (t.amount || 0), 0), currency),
-          ]);
-        }
-
-        if (resumoBody.length > 0) {
-          autoTable(doc, {
-            head: [['Fonte', 'Titular', 'Análises', 'Qtd.', 'Total']],
-            body: resumoBody,
-            startY: resumoStartY + 6,
-            theme: 'striped',
-            headStyles: { fillColor: [96, 165, 250], textColor: 255, fontStyle: 'bold' },
-            styles: { fontSize: 8, cellPadding: 3 },
-            columnStyles: { 4: { halign: 'right' } },
-          });
-        }
+    // Resumo por fonte
+    if (sections.summary && filteredTransactions.length > 0 && paymentSources.length > 0) {
+      const resumoBody = paymentSources
+        .filter(s => filteredTransactions.some(t => t.sourceId === s.id))
+        .map(s => {
+          const txs   = filteredTransactions.filter(t => t.sourceId === s.id);
+          const total = txs.reduce((sum, t) => sum + (t.amount || 0), 0);
+          return [s.name, s.includeInProjection ? 'Incluída' : 'Excluída', txs.length, formatCurrency(total, currency)];
+        });
+      const noSource = filteredTransactions.filter(t => !t.sourceId);
+      if (noSource.length > 0) {
+        resumoBody.push(['Sem fonte', 'Sim', noSource.length, formatCurrency(noSource.reduce((s, t) => s + (t.amount || 0), 0), currency)]);
+      }
+      if (resumoBody.length > 0) {
+        const y = doc.lastAutoTable?.finalY ? doc.lastAutoTable.finalY + 14 : 200;
+        const addNewPage = y > pageHeight - 80;
+        if (addNewPage) doc.addPage();
+        const startY = addNewPage ? 22 : y;
+        doc.setFontSize(12); doc.setTextColor(52, 211, 153);
+        doc.text('Resumo por Fonte', 14, startY);
+        autoTable(doc, {
+          head: [['Fonte', 'Análises', 'Qtd.', 'Total']],
+          body: resumoBody,
+          startY: startY + 8,
+          theme: 'striped',
+          headStyles: { fillColor: [96, 165, 250], textColor: 255, fontStyle: 'bold' },
+          styles: { fontSize: 8, cellPadding: 3 },
+          columnStyles: { 3: { halign: 'right' } },
+        });
       }
     }
 
-    // ── Pág 5: Insights ─────────────────────────────────────────────────────
-    if (scoreBreakdown?.improvements?.length > 0) {
-      doc.addPage();
-
-      doc.setFontSize(16);
-      doc.setTextColor(52, 211, 153);
-      doc.text('Insights e Recomendações', 14, 25);
-
-      doc.setFontSize(12);
-      doc.setTextColor(60);
-      doc.text('Oportunidades de Melhoria', 14, 40);
-
-      scoreBreakdown.improvements.slice(0, 5).forEach((imp, idx) => {
-        const y = 55 + idx * 20;
-        doc.setFontSize(10);
-        doc.setTextColor(52, 211, 153);
-        doc.text(`+${imp.potentialGain} pontos`, 14, y);
-        doc.setTextColor(0);
-        doc.text(imp.category, 45, y);
-        doc.setFontSize(9);
-        doc.setTextColor(100);
-        doc.text(imp.action, 14, y + 6);
-      });
-    }
-
-    // ── Footer em todas as páginas ──────────────────────────────────────────
+    // Footer
     const pageCount = doc.internal.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
-      doc.setFontSize(8);
-      doc.setTextColor(150);
+      doc.setFontSize(7.5); doc.setTextColor(150);
       doc.text(
-        `Página ${i} de ${pageCount} • Planejador Financeiro Pessoal`,
-        pageWidth / 2, pageHeight - 10,
-        { align: 'center' }
+        `Página ${i} de ${pageCount} • Luna Finance`,
+        pageWidth / 2, pageHeight - 8, { align: 'center' }
       );
     }
 
     return doc;
   };
 
-  // ─── Handler de exportação ───────────────────────────────────────────────
+  // ── Handler principal ──────────────────────────────────────────────────────
 
   const handleExport = async () => {
-    const hasProjection  = projection.length > 0;
-    const hasTransactions = transactions.length > 0;
+    const hasProjection   = sections.projection && projection.length > 0;
+    const hasTransactions = sections.transactions && filteredTransactions.length > 0;
+    const hasSources      = sections.sources && paymentSources.length > 0;
 
-    if (!hasProjection && !hasTransactions) {
+    if (!hasProjection && !hasTransactions && !hasSources) {
       toast.error('Nenhum dado para exportar', {
-        description: 'Configure seus dados financeiros ou registre algum gasto primeiro.',
+        description: 'Ajuste os filtros ou configure seus dados financeiros.',
       });
       return;
     }
 
     setIsExporting(true);
-
     try {
       if (exportFormat === 'csv') {
-        const csvContent = generateCSV();
-        if (csvContent) {
-          const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const csv = generateCSV();
+        if (csv) {
+          const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
           const url  = URL.createObjectURL(blob);
           const link = document.createElement('a');
           link.href     = url;
-          link.download = `planejamento-financeiro-${new Date().toISOString().slice(0, 10)}.csv`;
+          link.download = `luna-finance-${new Date().toISOString().slice(0, 10)}.csv`;
           link.click();
           URL.revokeObjectURL(url);
           toast.success('CSV exportado com sucesso!');
         }
-      } else if (exportFormat === 'pdf') {
+      } else {
         const doc = await generatePDF();
         if (doc) {
-          doc.save(`planejamento-financeiro-${new Date().toISOString().slice(0, 10)}.pdf`);
+          doc.save(`luna-finance-${new Date().toISOString().slice(0, 10)}.pdf`);
           toast.success('PDF exportado com sucesso!');
         }
       }
-    } catch (error) {
-      console.error('Export error:', error);
-      toast.error('Erro ao exportar', { description: 'Tente novamente mais tarde.' });
+    } catch (err) {
+      console.error('Export error:', err);
+      toast.error('Erro ao exportar', { description: 'Tente novamente.' });
     } finally {
       setIsExporting(false);
     }
   };
 
-  // ─── UI ─────────────────────────────────────────────────────────────────────
+  // ── UI ─────────────────────────────────────────────────────────────────────
+
+  const allCatsSelected     = selectedCategories.size === ALL_CATEGORIES.length;
+  const allSourcesSelected  = selectedSources.size === paymentSources.length + 1;
+  const allSectionsSelected = Object.values(sections).every(Boolean);
 
   return (
-    <Card className="card-grid-border" data-testid="export-data">
+    <Card data-testid="export-data">
       <CardHeader className="pb-3">
         <CardTitle className="text-lg flex items-center gap-2">
           <Download className="h-5 w-5 text-primary" />
           Exportar Dados
         </CardTitle>
         <CardDescription>
-          Relatório profissional em CSV ou PDF — inclui lançamentos e fontes de pagamento
+          Relatório em CSV ou PDF com filtros avançados
         </CardDescription>
       </CardHeader>
+
       <CardContent className="space-y-4">
+
+        {/* ── Formato + botão exportar ────────────────────────────────────── */}
         <div className="flex items-center gap-3">
           <Select value={exportFormat} onValueChange={setExportFormat}>
-            <SelectTrigger className="w-[140px]" data-testid="export-format-select">
+            <SelectTrigger className="w-[120px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="csv">
                 <span className="flex items-center gap-2">
-                  <FileSpreadsheet className="h-4 w-4" />
-                  CSV
+                  <FileSpreadsheet className="h-4 w-4" />CSV
                 </span>
               </SelectItem>
               <SelectItem value="pdf">
                 <span className="flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  PDF
+                  <FileText className="h-4 w-4" />PDF
                 </span>
               </SelectItem>
             </SelectContent>
@@ -601,40 +530,191 @@ export const ExportData = () => {
 
           <Button
             onClick={handleExport}
-            disabled={isExporting || (projection.length === 0 && transactions.length === 0)}
+            disabled={isExporting}
             className="flex-1"
             data-testid="export-button"
           >
             {isExporting ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Exportando...
-              </>
+              <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Exportando...</>
             ) : (
-              <>
-                <Download className="h-4 w-4 mr-2" />
-                Exportar {exportFormat.toUpperCase()}
-              </>
+              <><Download className="h-4 w-4 mr-2" />Exportar {exportFormat.toUpperCase()}</>
             )}
           </Button>
+
+          <button
+            onClick={() => setFiltersOpen(v => !v)}
+            className={cn(
+              'h-10 w-10 rounded-xl border flex items-center justify-center transition-all shrink-0',
+              filtersOpen
+                ? 'bg-primary/10 border-primary/40 text-primary'
+                : 'bg-muted/40 border-border/40 text-muted-foreground hover:text-foreground'
+            )}
+            title="Filtros avançados"
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+          </button>
         </div>
 
-        {/* Resumo do que será exportado */}
-        <div className="text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-foreground">O que será incluído:</p>
-          <p>• <strong>CSV</strong>: projeção, fontes, lançamentos e resumo por fonte</p>
-          <p>• <strong>PDF</strong>: relatório completo com capa, configuração, projeção, lançamentos por fonte e insights</p>
-          {transactions.length > 0 && (
-            <p className="text-primary">
-              → {transactions.length} lançamento{transactions.length > 1 ? 's' : ''} registrado{transactions.length > 1 ? 's' : ''}
+        {/* ── Painel de filtros ───────────────────────────────────────────── */}
+        {filtersOpen && (
+          <div className="space-y-4 pt-1 border-t border-border/40">
+
+            {/* Seções */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  <LayoutList className="h-3.5 w-3.5" />
+                  Seções
+                </div>
+                <button
+                  onClick={allSectionsSelected ? () => setSections({ projection: false, transactions: false, sources: false, summary: false }) : selectAll}
+                  className="text-[11px] text-primary hover:opacity-80 transition-opacity"
+                >
+                  {allSectionsSelected ? 'Desmarcar todas' : 'Selecionar todas'}
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <SectionToggle icon={FileText}     label="Projeção"      checked={sections.projection}   onChange={v => toggleSection('projection')} />
+                <SectionToggle icon={LayoutList}   label="Lançamentos"   checked={sections.transactions} onChange={v => toggleSection('transactions')} />
+                <SectionToggle icon={CreditCard}   label="Fontes"        checked={sections.sources}      onChange={v => toggleSection('sources')} />
+                <SectionToggle icon={Tag}          label="Resumo/fonte"  checked={sections.summary}      onChange={v => toggleSection('summary')} />
+              </div>
+            </div>
+
+            {/* Período */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                <Calendar className="h-3.5 w-3.5" />
+                Período
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {PERIOD_PRESETS.map(p => (
+                  <button
+                    key={p.value}
+                    onClick={() => setPeriodPreset(p.value)}
+                    className={cn(
+                      'px-2.5 py-1 rounded-lg text-xs font-medium border transition-all',
+                      periodPreset === p.value
+                        ? 'bg-primary/10 border-primary/40 text-primary'
+                        : 'bg-muted/40 border-border/40 text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+
+              {periodPreset === 'custom' && (
+                <div className="flex items-center gap-2 pt-1">
+                  <div className="flex-1">
+                    <p className="text-[10px] text-muted-foreground mb-1">De</p>
+                    <input
+                      type="date"
+                      value={customFrom}
+                      onChange={e => setCustomFrom(e.target.value)}
+                      className="w-full h-8 rounded-lg bg-muted/50 border border-border/40 px-2 text-xs text-foreground focus:outline-none focus:border-primary/40"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-[10px] text-muted-foreground mb-1">Até</p>
+                    <input
+                      type="date"
+                      value={customTo}
+                      onChange={e => setCustomTo(e.target.value)}
+                      className="w-full h-8 rounded-lg bg-muted/50 border border-border/40 px-2 text-xs text-foreground focus:outline-none focus:border-primary/40"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Categorias */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  <Tag className="h-3.5 w-3.5" />
+                  Categorias
+                </div>
+                <button
+                  onClick={allCatsSelected ? clearAllCategories : selectAllCategories}
+                  className="text-[11px] text-primary hover:opacity-80 transition-opacity"
+                >
+                  {allCatsSelected ? 'Desmarcar todas' : 'Selecionar todas'}
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-y-2 gap-x-4">
+                {ALL_CATEGORIES.map(id => (
+                  <CheckItem
+                    key={id}
+                    label={CATEGORY_LABELS[id]}
+                    checked={selectedCategories.has(id)}
+                    onChange={val => toggleCategory(id, val)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Fontes */}
+            {paymentSources.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    <CreditCard className="h-3.5 w-3.5" />
+                    Fontes de Pagamento
+                  </div>
+                  <button
+                    onClick={allSourcesSelected ? clearAllSources : selectAllSources}
+                    className="text-[11px] text-primary hover:opacity-80 transition-opacity"
+                  >
+                    {allSourcesSelected ? 'Desmarcar todas' : 'Selecionar todas'}
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {paymentSources.map(s => (
+                    <CheckItem
+                      key={s.id}
+                      label={s.name}
+                      checked={selectedSources.has(s.id)}
+                      onChange={val => toggleSource(s.id, val)}
+                      color={s.color}
+                    />
+                  ))}
+                  <CheckItem
+                    label="Sem fonte cadastrada"
+                    checked={selectedSources.has('__none__')}
+                    onChange={val => toggleSource('__none__', val)}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Resumo do que será exportado ────────────────────────────────── */}
+        <div className="text-xs text-muted-foreground space-y-1 pt-1 border-t border-border/30">
+          <div className="flex items-center justify-between">
+            <span className="font-medium text-foreground text-[11px]">O que será exportado:</span>
+            {from && (
+              <span className="text-[10px] text-primary">
+                {fmtDate(from)} → {fmtDate(to)}
+              </span>
+            )}
+          </div>
+          {sections.projection && projection.length > 0 && (
+            <p>• Projeção: <span className="text-foreground">{projection.length} meses</span></p>
+          )}
+          {sections.transactions && (
+            <p>• Lançamentos: <span className="text-primary font-medium">{filteredTransactions.length}</span>
+              {filteredTransactions.length !== transactions.length && (
+                <span className="text-muted-foreground"> (de {transactions.length} total)</span>
+              )}
             </p>
           )}
-          {paymentSources.length > 0 && (
-            <p className="text-primary">
-              → {paymentSources.length} fonte{paymentSources.length > 1 ? 's' : ''} de pagamento
-            </p>
+          {sections.sources && paymentSources.length > 0 && (
+            <p>• Fontes: <span className="text-foreground">{paymentSources.length}</span></p>
           )}
         </div>
+
       </CardContent>
     </Card>
   );
